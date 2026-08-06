@@ -17,9 +17,12 @@ else
   echo "==> 2/4 .env 已存在,保留"
 fi
 
-echo "==> 3/4 安装依赖(国内源加速,失败自动换源重试)"
+echo "==> 3/4 安装依赖(国内源加速,优先锁定版本,失败自动换源重试)"
 PY=.venv/bin/python
 install_deps() {
+  if [ -f requirements.lock.txt ]; then
+    $PY -m pip install -r requirements.lock.txt -i "$1" -q || return 1
+  fi
   $PY -m pip install -e ".[dev]" -i "$1" -q || return 1
 }
 if ! install_deps https://pypi.tuna.tsinghua.edu.cn/simple; then
