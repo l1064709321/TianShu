@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>天枢</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body[data-theme="light"] { --bg:#f5f6f8; --panel:#fff; --border:#e2e5ea; --text:#1a202c; --muted:#6b7280; --agentbg:#eef1f6; --codebg:#f0f2f5; }
+  body { margin: 0; font-family: system-ui, sans-serif; background: #0f1115; color: #e6e6e6; height: 100vh; display: flex; flex-direction: column; }
+  body[data-theme="light"] { background: var(--bg); color: var(--text); }
+  header { padding: 12px 20px; background: #161a22; border-bottom: 1px solid #262b36; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  body[data-theme="light"] header { background: var(--panel); border-bottom-color: var(--border); }
+  header h1 { font-size: 16px; margin: 0; color: #7cc4ff; }
+  header .spacer { flex: 1; }
+  .pill { font-size: 12px; color: #8b93a3; }
+  select { background: #0f1115; border: 1px solid #2b313d; border-radius: 8px; padding: 6px 10px; color: #e6e6e6; font-size: 13px; outline: none; max-width: 320px; }
+  select:focus { border-color: #3b82f6; }
+  #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: 78%; padding: 10px 14px; border-radius: 10px; white-space: pre-wrap; font-size: 14px; line-height: 1.6; }
+  .user { align-self: flex-end; background: #1d4ed8; }
+  .agent { align-self: flex-start; background: #232936; }
+  .meta { font-size: 11px; color: #8b93a3; margin-bottom: 4px; }
+  .subtask { margin: 4px 0; padding: 6px 10px; background: #1a1f2a; border-left: 3px solid #3a5a8c; border-radius: 4px; font-size: 13px; }
+  #inputbar { display: flex; gap: 10px; padding: 14px 20px; background: #161a22; border-top: 1px solid #262b36; }
+  #input { flex: 1; background: #0f1115; border: 1px solid #2b313d; border-radius: 8px; padding: 10px 14px; color: #e6e6e6; font-size: 14px; outline: none; }
+  #input:focus { border-color: #3b82f6; }
+  button { background: #1d4ed8; border: none; color: #fff; border-radius: 8px; padding: 10px 18px; font-size: 14px; cursor: pointer; }
+  button:hover { background: #2563eb; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  #pending { display: none; padding: 10px 20px; background: #1a2332; border-top: 1px solid #2b313d; font-size: 13px; }
+  #pending.visible { display: block; }
+  .approve, .reject { margin-right: 8px; padding: 4px 12px; font-size: 12px; }
+  .approve { background: #15803d; } .approve:hover { background: #16a34a; }
+  .reject { background: #b91c1c; } .reject:hover { background: #dc2626; }
+  .tool { font-size: 12px; color: #7cc4ff; margin: 2px 0; }
+  #status { font-size: 12px; }
+  .agent-run { font-size: 12px; color: #8b93a3; margin: 2px 0; }
+  #layout { flex: 1; display: flex; overflow: hidden; }
+  #sidebar { width: 220px; background: #12151c; border-right: 1px solid #262b36; display: flex; flex-direction: column; }
+  #rightbar { width: 240px; background: #12151c; border-left: 1px solid #262b36; display: flex; flex-direction: column; overflow-y: auto; padding: 10px; gap: 10px; }
+  #rightbar h3 { margin: 0; font-size: 13px; color: #7cc4ff; }
+  .metric-card { background: #1a1f2a; border: 1px solid #2b313d; border-radius: 8px; padding: 10px; }
+  .metric-card .num { font-size: 26px; font-weight: 700; color: #7cc4ff; }
+  .metric-card .label { font-size: 11px; color: #8b93a3; margin-top: 2px; }
+  .metric-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; color: #b6bdca; }
+  .metric-row .v { color: #e6e6e6; }
+  .bar-wrap { height: 8px; background: #0d1017; border-radius: 4px; overflow: hidden; margin-top: 6px; }
+  .bar-hit { height: 100%; background: #15803d; transition: width .4s; }
+  .bar-miss { height: 100%; background: #b91c1c; display: inline-block; }
+  #cache-history { max-height: 160px; overflow-y: auto; }
+  .cache-item { font-size: 11px; color: #8b93a3; padding: 2px 0; border-bottom: 1px solid #1c222d; }
+  .cache-item b { color: #7cc4ff; }
+  body[data-theme="light"] #rightbar { background: #fafbfc; border-left-color: var(--border); }
+  body[data-theme="light"] .metric-card { background: #fff; border-color: var(--border); }
+  body[data-theme="light"] .metric-row { color: var(--muted); }
+  body[data-theme="light"] .metric-row .v { color: var(--text); }
+  body[data-theme="light"] #cache-history { border-top-color: var(--border); }
+  body[data-theme="light"] .cache-item { border-bottom-color: var(--border); }
+  #session-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .session-item { padding: 8px 10px; border-radius: 6px; font-size: 13px; color: #b6bdca; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .session-item:hover { background: #1c222d; }
+  .session-item.active { background: #1d3a5f; color: #fff; }
+  #new-session { margin: 8px; padding: 8px; background: #1d4ed8; border: none; color: #fff; border-radius: 8px; font-size: 13px; cursor: pointer; }
+  #new-session:hover { background: #2563eb; }
+  .msg code { background: #2a3040; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  .msg h2, .msg h3, .msg h4 { margin: 8px 0 4px; }
+  .msg p { margin: 4px 0; }
+  .msg ul { margin: 4px 0; padding-left: 20px; }
+  .code-wrap { margin: 8px 0; border: 1px solid #2b313d; border-radius: 8px; overflow: hidden; }
+  .code-head { display: flex; justify-content: space-between; align-items: center; background: #1a1f2a; padding: 4px 10px; font-size: 12px; color: #8b93a3; }
+  .copy { background: #2a3040; border: none; color: #c6cdd8; border-radius: 4px; padding: 2px 10px; font-size: 11px; cursor: pointer; }
+  .copy:hover { background: #3a4254; }
+  .code-block { margin: 0; padding: 10px; font-size: 12px; overflow-x: auto; background: #0d1017; color: #d4dae5; }
+  body[data-theme="light"] .msg.user { background: #1d4ed8; color: #fff; }
+  body[data-theme="light"] .msg.agent { background: var(--agentbg); }
+  body[data-theme="light"] .meta, body[data-theme="light"] .pill { color: var(--muted); }
+  body[data-theme="light"] .subtask { background: #f0f2f5; border-left-color: #9db4d6; }
+  body[data-theme="light"] .code-block { background: var(--codebg); color: var(--text); }
+  body[data-theme="light"] .code-head { background: #e6e9ef; }
+  body[data-theme="light"] .copy { background: #dde1e8; color: var(--text); }
+  body[data-theme="light"] #inputbar { background: var(--panel); border-top-color: var(--border); }
+  body[data-theme="light"] #input, body[data-theme="light"] select { background: #fff; border-color: var(--border); color: var(--text); }
+  body[data-theme="light"] #sidebar { background: #fafbfc; border-right-color: var(--border); }
+  body[data-theme="light"] .session-item:hover { background: #eef1f6; }
+  @media (max-width: 720px) {
+    #sidebar { width: 100%; height: auto; max-height: 140px; border-right: none; border-bottom: 1px solid #262b36; }
+    #rightbar { display: none; }
+    #layout { flex-direction: column; }
+    header { gap: 8px; }
+    .msg { max-width: 92%; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>天枢</h1>
+  <span id="status" class="pill">连接中...</span>
+  <span id="agents" class="pill"></span>
+  <span class="spacer"></span>
+  <label class="pill">模型:</label>
+  <select id="provider-select" title="切换模型(运行时生效)"></select>
+  <button id="theme-btn" style="background:#2a3040;padding:6px 10px;font-size:12px;">☀ 浅色</button>
+</header>
+<div id="layout">
+  <div id="sidebar">
+    <button id="new-session">+ 新会话</button>
+    <div id="session-list"></div>
+  </div>
+  <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+    <div id="messages"></div>
+    <div id="pending"></div>
+    <div id="inputbar">
+      <input id="input" placeholder="输入任务,Enter 发送,主 Agent 将调度子 Agent 执行..." autofocus>
+      <button id="cancel-btn" style="display:none;background:#b91c1c;">取消</button>
+      <button id="send">发送</button>
+    </div>
+  </div>
+  <div id="rightbar">
+    <h3>缓存命中监测</h3>
+    <div class="metric-card">
+      <div class="num" id="cache-rate">--</div>
+      <div class="label">prompt 缓存命中率(实时)</div>
+      <div class="bar-wrap"><div class="bar-hit" id="cache-bar" style="width:0%"></div></div>
+      <div class="metric-row"><span>请求次数</span><span class="v" id="cache-req">0</span></div>
+      <div class="metric-row"><span>命中 token</span><span class="v" id="cache-hit">0</span></div>
+      <div class="metric-row"><span>未命中 token</span><span class="v" id="cache-miss">0</span></div>
+      <div class="metric-row"><span>总 prompt token</span><span class="v" id="cache-total">0</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="label" style="font-size:12px;color:#7cc4ff;">最近 20 次调用</div>
+      <div id="cache-history"></div>
+    </div>
+    <h3>记忆状态</h3>
+    <div class="metric-card">
+      <div class="metric-row"><span>注入条目</span><span class="v" id="mem-injected">-</span></div>
+      <div class="metric-row"><span>命中条目</span><span class="v" id="mem-hit">-</span></div>
+      <div class="metric-row"><span>注入 token</span><span class="v" id="mem-tokens">-</span></div>
+      <div class="metric-row"><span>上次任务</span><span class="v" id="mem-task" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">-</span></div>
+      <div id="mem-blocks"></div>
+    </div>
+  </div>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+let ws = null;
+const pendingBox = $('#pending');
+const providerSelect = $('#provider-select');
+const sessionList = $('#session-list');
+let currentModel = '';
+let currentSession = '';
+let loadingSession = false;
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderMarkdown(text) {
+  const escaped = escapeHtml(text);
+  const codeBlockRe = /```(\w*)\n([\s\S]*?)```/g;
+  let processed = escaped.replace(codeBlockRe, (m, lang, code) => {
+    const id = 'CB' + (__cbSeq++);
+    window.__codeBlocks[id] = code;
+    return `<div class="code-wrap"><div class="code-head"><span>${lang||'code'}</span><button class="copy" onclick="copyCode('${id}')">复制</button></div><pre class="code-block">${code.trim()}</pre></div>`;
+  });
+  processed = processed
+    .replace(/^### (.*)$/gm, '<h4>$1</h4>')
+    .replace(/^## (.*)$/gm, '<h3>$1</h3>')
+    .replace(/^# (.*)$/gm, '<h2>$1</h2>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^[-*] (.*)$/gm, '<li>$1</li>')
+    .replace(/\n{2,}/g, '\n');
+  const lines = processed.split('\n');
+  let inList = false, html = '';
+  const blockEnds = ['H2','H3','H4'];
+  for (const line of lines) {
+    const t = line.trim();
+    if (t.startsWith('<li>')) {
+      if (!inList) { html += '<ul>'; inList = true; }
+      html += t;
+    } else {
+      if (inList) { html += '</ul>'; inList = false; }
+      if (!t) continue;
+      if (t.startsWith('<h') || t.startsWith('<pre') || t.startsWith('<div class="code')) { html += t; }
+      else html += `<p>${t}</p>`;
+    }
+  }
+  if (inList) html += '</ul>';
+  return html;
+}
+
+let __cbSeq = 0;
+window.__codeBlocks = {};
+
+function copyCode(id) {
+  const code = window.__codeBlocks[id];
+  if (!code) return;
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(code).then(
+      () => {},
+      () => legacyCopy(code)
+    );
+  } else {
+    legacyCopy(code);
+  }
+}
+
+function legacyCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
+}
+
+function addMsg(role, text, meta='') {
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  if (meta) { const m = document.createElement('div'); m.className = 'meta'; m.textContent = meta; div.appendChild(m); }
+  div.innerHTML = renderMarkdown(String(text));
+  $('#messages').appendChild(div);
+  $('#messages').scrollTop = $('#messages').scrollHeight;
+}
+
+function renderPlan(plan) {
+  let out = '';
+  for (const st of plan.subtasks || []) {
+    out += `\n[子任务 ${st.worker}] ${st.goal}\n`;
+    if (st.error) out += `  错误: ${st.error}\n`;
+    out += `  状态: ${st.status}\n`;
+    if (st.result) {
+      if (st.result.content) out += `  产出: ${st.result.content}\n`;
+      if (st.result.error) out += `  结果错误: ${st.result.error}\n`;
+      if (st.result.child_agents && st.result.child_agents.length) {
+        out += `  调用了子 Agent: ${st.result.child_agents.join(', ')}\n`;
+      }
+      if (st.result.tool_calls && st.result.tool_calls.length) {
+        for (const t of st.result.tool_calls) {
+          out += `  工具 [${t.name}]: ${String(t.output || '').slice(0, 200)}${t.output && t.output.length > 200 ? '...' : ''}\n`;
+        }
+      }
+    }
+  }
+  if (plan.summary) { addMsg('agent', plan.summary, `主 Agent 汇总 · ${currentModel}`); }
+  if (out) { addMsg('agent', out.trim(), '子任务'); }
+}
+
+pendingBox.addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  ws.send(JSON.stringify({ type: 'review', review_id: btn.dataset.id, approve: btn.classList.contains('approve') }));
+  btn.closest('.subtask').remove();
+  if (!pendingBox.children.length) pendingBox.classList.remove('visible');
+});
+
+providerSelect.addEventListener('change', async () => {
+  const name = providerSelect.value;
+  if (!name) return;
+  const resp = await fetch('/api/provider/switch', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ provider: name })
+  });
+  const data = await resp.json();
+  if (data.ok) {
+    const opt = providerSelect.options[providerSelect.selectedIndex];
+    currentModel = opt.dataset.model || name;
+    addMsg('agent', `已切换模型: ${name} (${currentModel})`, '系统');
+    $('#status').textContent = '已连接';
+  } else {
+    addMsg('agent', `切换失败: ${data.error}`, '系统');
+  }
+});
+
+async function loadProviders() {
+  const resp = await fetch('/api/providers');
+  const data = await resp.json();
+  const active = data.default;
+  for (const p of data.providers) {
+    const opt = document.createElement('option');
+    opt.value = p.name;
+    opt.dataset.model = p.model;
+    opt.textContent = `${p.name} · ${p.model}${p.api_key ? ' · key:' + p.api_key : ''}`;
+    providerSelect.appendChild(opt);
+  }
+  providerSelect.value = active;
+  currentModel = (providerSelect.selectedOptions[0] || {}).dataset?.model || active;
+}
+
+let taskRunning = false;
+
+function setTaskRunning(running) {
+  taskRunning = running;
+  $('#send').disabled = running;
+  $('#cancel-btn').style.display = running ? 'inline-block' : 'none';
+}
+
+function ask() {
+  const task = $('#input').value.trim();
+  if (!task || taskRunning) return;
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    addMsg('agent', '(连接未就绪,请稍候重试)', '系统');
+    return;
+  }
+  addMsg('user', task);
+  $('#input').value = '';
+  $('#messages').innerHTML += '<div class="agent-run" id="activity"></div>';
+  setTaskRunning(true);
+  ws.send(JSON.stringify({ type: 'ask', task, session_id: currentSession }));
+}
+
+function renderActivity() {
+  const el = $('#activity');
+  if (!el) return;
+  let html = '';
+  for (const a of activities) {
+    if (a.event === 'subtask_start') {
+      html += `<div class="subtask running">▶ [${a.data.worker}] ${a.data.goal}</div>`;
+    } else if (a.event === 'subtask_done') {
+      html += `<div class="subtask done">✔ [${a.data.worker}] ${a.data.status}</div>`;
+    } else if (a.event === 'agent_action' && a.data.action === 'tool') {
+      html += `<div class="tool">🔧 ${a.data.agent} 调用 ${a.data.tool}</div>`;
+    } else if (a.event === 'agent_action' && a.data.action === 'call_agent') {
+      html += `<div class="tool">⇄ ${a.data.agent} 调用 ${a.data.target}</div>`;
+    } else if (a.event === 'phase') {
+      html += `<div class="meta">阶段: ${a.data.phase}</div>`;
+    }
+  }
+  el.innerHTML = html;
+  $('#messages').scrollTop = $('#messages').scrollHeight;
+}
+
+function handleAgentEvent(m) {
+  activities.push({ event: m.event, data: m.data });
+  renderActivity();
+}
+
+async function loadSessions(skipRestore) {
+  try {
+    const resp = await fetch('/api/sessions');
+    const data = await resp.json();
+    if (!data.sessions) return;
+    currentSession = data.current || (data.sessions[0] || {}).id || '';
+    sessionList.innerHTML = '';
+    for (const s of data.sessions) {
+      const div = document.createElement('div');
+      div.className = 'session-item' + (s.id === currentSession ? ' active' : '');
+      div.textContent = `${s.title || '会话'} · ${new Date(s.updated_at * 1000).toLocaleString('zh-CN', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'})}`;
+      div.dataset.id = s.id;
+      sessionList.appendChild(div);
+    }
+    if (currentSession && !loadingSession && !skipRestore) {
+      await restoreMessages(currentSession);
+    }
+  } catch (e) { /* 会话加载失败不影响主流程 */ }
+}
+
+let restoreSeq = 0;
+async function restoreMessages(sessionId) {
+  loadingSession = true;
+  const seq = ++restoreSeq;
+  try {
+    const resp = await fetch(`/api/session/${sessionId}/messages`);
+    const data = await resp.json();
+    if (seq !== restoreSeq) return;
+    $('#messages').innerHTML = '';
+    for (const m of data.messages || []) {
+      const role = (m.role === 'user') ? 'user' : 'agent';
+      addMsg(role, m.content || '', (m.role === 'user' ? '我' : '天枢'));
+    }
+  } catch (e) {}
+  if (seq === restoreSeq) loadingSession = false;
+}
+
+async function switchSession(id) {
+  const resp = await fetch('/api/session/switch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ session_id: id }) });
+  const data = await resp.json();
+  if (data.ok) {
+    currentSession = id;
+    restoreMessages(id);
+    loadSessions();
+  }
+}
+
+sessionList.addEventListener('click', e => {
+  const item = e.target.closest('.session-item');
+  if (item) switchSession(item.dataset.id);
+});
+$('#new-session').addEventListener('click', async () => {
+  const resp = await fetch('/api/session', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ title: '新会话' }) });
+  const data = await resp.json();
+  if (data.ok) {
+    $('#messages').innerHTML = '';
+    currentSession = data.session_id;
+    loadSessions();
+  }
+});
+
+function pct(n) {
+  return (Number(n) * 100).toFixed(1) + '%';
+}
+
+async function refreshMonitor() {
+  try {
+    const resp = await fetch('/api/memory');
+    const data = await resp.json();
+    const cache = data.cache || {};
+    const rate = cache.hit_rate || 0;
+    $('#cache-rate').textContent = pct(rate);
+    $('#cache-bar').style.width = (rate * 100) + '%';
+    $('#cache-req').textContent = cache.requests || 0;
+    $('#cache-hit').textContent = cache.hit_tokens || 0;
+    $('#cache-miss').textContent = cache.miss_tokens || 0;
+    $('#cache-total').textContent = cache.prompt_tokens || 0;
+    const hist = (cache.recent || []).slice().reverse();
+    $('#cache-history').innerHTML = hist.map(h =>
+      `<div class="cache-item"><b>${h.model}</b> hit:${h.hit} miss:${h.miss} (${pct(h.rate)})</div>`
+    ).join('') || '<div class="cache-item">暂无调用</div>';
+    const ms = data.memory_stats || {};
+    $('#mem-injected').textContent = ms.injected_entries ?? '-';
+    $('#mem-hit').textContent = ms.hit_entries ?? '-';
+    $('#mem-tokens').textContent = ms.injected_tokens ?? '-';
+    $('#mem-task').textContent = ms.task || '-';
+    $('#mem-task').title = ms.task || '';
+    const blocks = data.blocks || {};
+    $('#mem-blocks').innerHTML = Object.entries(blocks).map(([k, v]) =>
+      `<div class="metric-row"><span>${k}</span><span class="v">${v} 条</span></div>`
+    ).join('') || '';
+  } catch (e) { /* 忽略瞬时错误 */ }
+}
+
+setInterval(refreshMonitor, 2000);
+refreshMonitor();
+
+let heartbeatTimer = null;
+let lastPong = 0;
+let reconnectTimer = null;
+let reconnectAttempts = 0;
+const HEARTBEAT_MS = 15000;
+const PONG_TIMEOUT_MS = 60000;
+const RECONNECT_MAX_DELAY_MS = 30000;
+
+function startHeartbeat() {
+  stopHeartbeat();
+  lastPong = Date.now();
+  heartbeatTimer = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'ping' }));
+      if (Date.now() - lastPong > PONG_TIMEOUT_MS) {
+        $('#status').textContent = '心跳超时,正在重连...';
+        ws.close();
+      }
+    }
+  }, HEARTBEAT_MS);
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+}
+
+function scheduleReconnect() {
+  if (reconnectTimer) return;
+  const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), RECONNECT_MAX_DELAY_MS);
+  reconnectAttempts++;
+  $('#status').textContent = `连接断开,${Math.round(delay / 1000)}s 后重连...`;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connectWs();
+  }, delay);
+}
+
+function connectWs() {
+  stopHeartbeat();
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => {
+    reconnectAttempts = 0;
+    $('#status').textContent = '已连接';
+    startHeartbeat();
+  };
+  ws.onclose = () => {
+    $('#status').textContent = '连接断开,重连中...';
+    stopHeartbeat();
+    scheduleReconnect();
+  };
+  ws.onmessage = onWsMessage;
+}
+
+function onWsMessage(e) {
+  const m = JSON.parse(e.data);
+  if (m.type === 'pong' || m.type === 'server_ping') {
+    lastPong = Date.now();
+    if (m.type === 'server_ping') ws.send(JSON.stringify({ type: 'server_pong' }));
+    return;
+  }
+  if (m.type === 'review_request') {
+    const d = m.data;
+    const row = document.createElement('div');
+    row.className = 'subtask';
+    row.innerHTML = `<b>待审批</b> ${d.agent} 调用 ${d.tool}${d.reason ? ' — ' + d.reason : ''}
+      <button class="approve" data-id="${d.id}">批准</button>
+      <button class="reject" data-id="${d.id}">拒绝</button>`;
+    pendingBox.appendChild(row);
+    pendingBox.classList.add('visible');
+  } else if (m.type === 'task_start') {
+    activities = [];
+  } else if (m.type === 'queued') {
+    addMsg('system', m.message || '前一个任务仍在执行,排队中...', '系统');
+  } else if (m.type === 'agent_event') {
+    handleAgentEvent(m);
+  } else if (m.type === 'result') {
+    const act = $('#activity');
+    if (act) act.remove();
+    setTaskRunning(false);
+    renderPlan(m.data);
+    loadSessions(true);
+  } else if (m.type === 'cancelled') {
+    const act = $('#activity');
+    if (act) act.remove();
+    setTaskRunning(false);
+    addMsg('agent', '(任务已取消)', '系统');
+    loadSessions(true);
+  }
+}
+
+let activities = [];
+
+$('#send').onclick = ask;
+$('#cancel-btn').onclick = () => { if (ws) ws.send(JSON.stringify({ type: 'cancel' })); };
+$('#theme-btn').onclick = () => {
+  const cur = document.body.dataset.theme || 'dark';
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.body.dataset.theme = next;
+  $('#theme-btn').textContent = next === 'dark' ? '☀ 浅色' : '🌙 深色';
+  try { localStorage.setItem('ts-theme', next); } catch(e) {}
+};
+try { const t = localStorage.getItem('ts-theme'); if (t === 'light') { document.body.dataset.theme = 'light'; $('#theme-btn').textContent = '🌙 深色'; } } catch(e) {}
+$('#input').addEventListener('keydown', e => { if (e.key === 'Enter') ask(); });
+loadProviders();
+fetch('/api/state').then(r => r.json()).then(s => $('#agents').textContent = 'Agent: ' + s.agents.join(', '));
+connectWs();
+</script>
+</body>
+</html>
