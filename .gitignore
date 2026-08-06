@@ -13,4 +13,5 @@ build/
 node_modules/
 __pycache__/
 datastore.*
-*.dblibpod/
+*.db
+libpod/$
