@@ -1,5 +1,11 @@
 # 天枢
 
+[![Python](https://img.shields.io/badge/Python-3.11+-blue)](https://www.python.org)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue)](https://github.com/l1064709321/tianshu/blob/main/LICENSE)
+[![Docker Pulls](https://img.shields.io/docker/pulls/lordofstars/tianshu)](https://hub.docker.com/r/lordofstars/tianshu)
+[![Docker Image Version](https://img.shields.io/docker/v/lordofstars/tianshu?sort=semver)](https://hub.docker.com/r/lordofstars/tianshu)
+[![Docker Image Size](https://img.shields.io/docker/image-size/lordofstars/tianshu)](https://hub.docker.com/r/lordofstars/tianshu)
+
 项目名称:天枢(北斗第一星)
 
 一个多 Agent 协同系统,目标能力对标 opencode。
