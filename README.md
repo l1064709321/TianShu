@@ -18,7 +18,7 @@ cd tianshu
 bash scripts/start.sh        # 自动装依赖、生成配置、启动 Web(离线 mock 模式)
 ```
 
-浏览器打开 http://127.0.0.1:8000 即可对话。连接真实模型:编辑 `.env` 填入你的厂商配置(见下方"配置模型"),重启 `bash scripts/start.sh`。
+浏览器打开 http://localhost:8000 即可对话。连接真实模型:编辑 `.env` 填入你的厂商配置(见下方"配置模型"),重启 `bash scripts/start.sh`。
 
 ## 一键 Docker 运行(无需装 Python/依赖)
 
@@ -27,7 +27,7 @@ docker pull lordofstars/tianshu
 docker run -p 8000:8000 lordofstars/tianshu
 ```
 
-镜像内含完整代码 + 锁定依赖,拉取即得可运行环境。浏览器打开 http://127.0.0.1:8000;连接真实模型挂载 .env:
+镜像内含完整代码 + 锁定依赖,拉取即得可运行环境。浏览器打开 http://localhost:8000;连接真实模型挂载 .env:
 
 ```bash
 docker run -p 8000:8000 -v "$PWD/.env:/app/.env" lordofstars/tianshu
@@ -104,7 +104,7 @@ EOF
 ```bash
 .venv/bin/tianshu chat          # 交互式聊天(主 Agent 调度)
 .venv/bin/tianshu ask "帮我抓取 https://example.com 并总结"
-.venv/bin/tianshu serve         # Web 界面: http://127.0.0.1:8000
+.venv/bin/tianshu serve         # Web 界面: http://localhost:8000
 .venv/bin/tianshu desktop       # 桌面端(原生窗口,自动回退浏览器)
 .venv/bin/tianshu providers     # 查看支持的 LLM 厂商
 ```
