@@ -1,6 +1,6 @@
 [project]
 name = "tianshu"
-version = "0.1.0"
+version = "0.0.0.0.0.1"
 description = "天枢 - 多 Agent 协同系统"
 requires-python = ">=3.11"
 license = "Apache-2.0"
