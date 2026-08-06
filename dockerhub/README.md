@@ -1,6 +1,11 @@
 # 天枢 Tianshu
 
-**Python 3.11+** · **Apache-2.0 License** · **v0.0.0.0.0.1**
+[![Python](https://img.shields.io/badge/Python-3.11+-blue)](https://www.python.org)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue)](https://github.com/l1064709321/tianshu/blob/main/LICENSE)
+[![Docker Pulls](https://img.shields.io/docker/pulls/lordofstars/tianshu)](https://hub.docker.com/r/lordofstars/tianshu)
+[![Docker Image Version](https://img.shields.io/docker/v/lordofstars/tianshu?sort=semver)](https://hub.docker.com/r/lordofstars/tianshu)
+[![Docker Image Size](https://img.shields.io/docker/image-size/lordofstars/tianshu)](https://hub.docker.com/r/lordofstars/tianshu)
+[![GitHub Stars](https://img.shields.io/github/stars/l1064709321/tianshu)](https://github.com/l1064709321/tianshu)
 
 多 Agent 协同系统,主 Agent 调度多个子 Agent,支持技能/工具调用、审核审批、三层记忆,三端(CLI / Web / 桌面)。
 
