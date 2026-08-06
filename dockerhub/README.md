@@ -1,11 +1,11 @@
 # 天枢 Tianshu
 
-[![Python](https://img.shields.io/badge/Python-3.11+-blue)](https://www.python.org)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue)](https://github.com/l1064709321/tianshu/blob/main/LICENSE)
-[![Docker Pulls](https://img.shields.io/docker/pulls/lordofstars/tianshu)](https://hub.docker.com/r/lordofstars/tianshu)
-[![Docker Image Version](https://img.shields.io/docker/v/lordofstars/tianshu?sort=semver)](https://hub.docker.com/r/lordofstars/tianshu)
-[![Docker Image Size](https://img.shields.io/docker/image-size/lordofstars/tianshu)](https://hub.docker.com/r/lordofstars/tianshu)
-[![GitHub Stars](https://img.shields.io/github/stars/l1064709321/tianshu)](https://github.com/l1064709321/tianshu)
+[![语言](https://img.shields.io/badge/%E8%AF%AD%E8%A8%80-Python_3.11%2B-blue)](https://www.python.org)
+[![许可](https://img.shields.io/badge/%E8%AE%B8%E5%8F%AF-Apache_2.0-blue)](https://github.com/l1064709321/tianshu/blob/main/LICENSE)
+[![下载量](https://img.shields.io/docker/pulls/lordofstars/tianshu?label=%E4%B8%8B%E8%BD%BD%E9%87%8F)](https://hub.docker.com/r/lordofstars/tianshu)
+[![镜像版本](https://img.shields.io/docker/v/lordofstars/tianshu?sort=semver&label=%E9%95%9C%E5%83%8F%E7%89%88%E6%9C%AC)](https://hub.docker.com/r/lordofstars/tianshu)
+[![镜像体积](https://img.shields.io/docker/image-size/lordofstars/tianshu?label=%E9%95%9C%E5%83%8F%E4%BD%93%E7%A7%AF)](https://hub.docker.com/r/lordofstars/tianshu)
+[![星标](https://img.shields.io/github/stars/l1064709321/tianshu?label=%E6%98%9F%E6%A0%87)](https://github.com/l1064709321/tianshu)
 
 多 Agent 协同系统,主 Agent 调度多个子 Agent,支持技能/工具调用、审核审批、三层记忆,三端(CLI / Web / 桌面)。
 
