@@ -27,9 +27,9 @@ def test_unknown_name_falls_back_to_openai_compatible():
 
 def test_provider_config_defaults():
     cfg = LLMProviderConfig()
-    assert cfg.name == "openai"
-    assert cfg.base_url == "https://api.openai.com/v1"
-    assert cfg.model == "gpt-4o-mini"
+    assert cfg.name == "mock"
+    assert cfg.base_url == "http://localhost:9100/v1"
+    assert cfg.model == "mock-model"
     assert cfg.timeout == 120.0
 
 

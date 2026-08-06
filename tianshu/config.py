@@ -9,10 +9,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class LLMProviderConfig(BaseModel):
-    name: str = "openai"
-    base_url: str = "https://api.openai.com/v1"
+    name: str = "mock"
+    base_url: str = "http://localhost:9100/v1"
     api_key: str = ""
-    model: str = "gpt-4o-mini"
+    model: str = "mock-model"
     temperature: float = 0.2
     timeout: float = 120.0
     max_tokens: int | None = None
@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     app_name: str = "tianshu"
     providers: list[LLMProviderConfig] = Field(default_factory=lambda: [LLMProviderConfig()])
-    default_provider: str = "openai"
+    default_provider: str = "mock"
     mode: Literal["full", "headless"] = "full"
 
 

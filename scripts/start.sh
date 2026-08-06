@@ -11,7 +11,7 @@ if [ ! -f .env ]; then
   echo "==> 2/4 未发现 .env,生成 mock 离线配置(想接真实模型请编辑 .env)"
   cat > .env <<'EOF'
 TIANSHU_DEFAULT_PROVIDER=mock
-TIANSHU_PROVIDERS=[{"name":"mock","base_url":"http://127.0.0.1:9100/v1","api_key":"","model":"mock-model","timeout":30}]
+TIANSHU_PROVIDERS=[{"name":"mock","base_url":"http://localhost:9100/v1","api_key":"","model":"mock-model","timeout":30}]
 EOF
 else
   echo "==> 2/4 .env 已存在,保留"

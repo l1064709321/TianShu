@@ -13,29 +13,35 @@ from tianshu.core.log import get_logger
 logger = get_logger("sandbox.docker")
 
 IMAGE_NAME = os.environ.get("TIANSHU_SANDBOX_IMAGE", "lordofstars/tianshu-sandbox")
-DOCKERFILE = """FROM python:3.12-slim
-
-RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple \\
-    fastapi uvicorn pydantic pydantic-settings httpx typer rich \\
-    prompt-toolkit beautifulsoup4 pyyaml aiosqlite pytest
-
-WORKDIR /workspace
-CMD ["bash"]
-"""
+DOCKERFILE = (Path(__file__).resolve().parent / "Dockerfile").read_text(encoding="utf-8")
 
 
-async def _run_docker(args: list[str], timeout: int = 60) -> tuple[str, str | None]:
+async def _run_docker(
+    args: list[str], timeout: int = 60, kill_cmd: list[str] | None = None
+) -> tuple[str, str | None]:
     try:
         proc = await asyncio.create_subprocess_exec(
             "docker", *args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except FileNotFoundError:
         return "", "docker 命令不存在"
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except asyncio.TimeoutError:
-        return "", "(docker 操作超时)"
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
+        if kill_cmd:
+            try:
+                await asyncio.create_subprocess_exec(
+                    *kill_cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL
+                )
+            except Exception:  # noqa: BLE001
+                pass
+        return "", "(docker 操作超时,已强杀)"
     out = stdout.decode(errors="replace").strip()
     err = stderr.decode(errors="replace").strip()
     if proc.returncode != 0:
@@ -76,12 +82,13 @@ async def run_in_docker(
     if image is None:
         return "", "Docker 沙箱不可用: 镜像构建失败"
     rel = str(cwd.resolve())
+    name = f"ts-sandbox-{asyncio.current_task().get_name()[:24]}"
     cmd = ["run", "--rm", "--network", "none", "--memory", "512m", "--cpus", "1"]
     cmd += ["-v", f"{rel}:/workspace:rw", "-w", "/workspace"]
-    cmd += ["--name", f"ts-sandbox-{asyncio.current_task().get_name()[:24]}"]
+    cmd += ["--name", name]
     cmd += [image]
     cmd += args
-    out, err = await _run_docker(cmd, timeout=timeout + 15)
+    out, err = await _run_docker(cmd, timeout=timeout + 15, kill_cmd=["docker", "kill", name])
     if err is not None:
         return out, f"Docker 执行失败: {err}"
     return out or "(无输出)", None

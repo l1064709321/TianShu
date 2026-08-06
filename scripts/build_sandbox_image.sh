@@ -14,13 +14,9 @@ docker build -t "$APP_IMAGE" -f Dockerfile .
 echo "==> 推送应用镜像"
 docker push "$APP_IMAGE"
 
-# 沙箱镜像: 仅依赖
+# 沙箱镜像: 仅依赖(静态 Dockerfile,无 python 依赖)
 echo "==> 2/2 构建沙箱镜像: $SANDBOX_IMAGE"
-docker build -t "$SANDBOX_IMAGE" -f <(python3 - <<'PYEOF'
-from tianshu.core.sandbox.docker import DOCKERFILE
-print(DOCKERFILE)
-PYEOF
-) .
+docker build -t "$SANDBOX_IMAGE" -f tianshu/core/sandbox/Dockerfile tianshu/core/sandbox
 
 echo "==> 推送沙箱镜像"
 docker push "$SANDBOX_IMAGE"
