@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import shlex
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,7 @@ from tianshu.core.log import get_logger
 
 logger = get_logger("sandbox.docker")
 
-IMAGE_NAME = "tianshu-sandbox"
+IMAGE_NAME = os.environ.get("TIANSHU_SANDBOX_IMAGE", "lordofstars/tianshu-sandbox")
 DOCKERFILE = """FROM python:3.12-slim
 
 RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple \\
