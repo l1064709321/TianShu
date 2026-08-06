@@ -18,7 +18,7 @@ else
 fi
 
 echo "==> 3/4 安装依赖(国内源加速)"
-.venv/bin/pip install -e ".[dev]" -i https://pypi.tuna.tsinghua.edu.cn/simple -q
+.venv/bin/python -m pip install -e ".[dev]" -i https://pypi.tuna.tsinghua.edu.cn/simple -q
 
 echo "==> 4/4 启动(浏览器打开 http://127.0.0.1:8000,Ctrl+C 停止)"
 if [ "$(grep -c 'mock' .env || true)" -gt 0 ]; then
