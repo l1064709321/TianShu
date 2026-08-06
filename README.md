@@ -14,6 +14,28 @@ bash scripts/start.sh        # 自动装依赖、生成配置、启动 Web(离�
 
 浏览器打开 http://127.0.0.1:8000 即可对话。连接真实模型:编辑 `.env` 填入你的厂商配置(见下方"配置模型"),重启 `bash scripts/start.sh`。
 
+## 一键 Docker 运行(无需装 Python/依赖)
+
+```bash
+docker pull lordofstars/tianshu
+docker run -p 8000:8000 lordofstars/tianshu
+```
+
+镜像内含完整代码 + 锁定依赖,拉取即得可运行环境。浏览器打开 http://127.0.0.1:8000;连接真实模型挂载 .env:
+
+```bash
+docker run -p 8000:8000 -v "$PWD/.env:/app/.env" lordofstars/tianshu
+```
+
+构建/推送镜像(需 `docker login -u 你的账号` 并配好 DOCKER_HUB_TOKEN):
+
+```bash
+bash scripts/build_sandbox_image.sh
+# 产物: lordofstars/tianshu(应用) + lordofstars/tianshu-sandbox(沙箱)
+```
+
+镜像名可用环境变量覆盖:`TIANSHU_IMAGE` / `TIANSHU_SANDBOX_IMAGE`。
+
 ## 项目目标
 
 - **多 Agent 协同**:一个主 Agent(Orchestrator)调度多个子 Agent(Worker),子 Agent 之间可相互调用,主 Agent 负责任务分解与结果汇总。
