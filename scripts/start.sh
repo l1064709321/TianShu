@@ -17,8 +17,15 @@ else
   echo "==> 2/4 .env 已存在,保留"
 fi
 
-echo "==> 3/4 安装依赖(国内源加速)"
-.venv/bin/python -m pip install -e ".[dev]" -i https://pypi.tuna.tsinghua.edu.cn/simple -q
+echo "==> 3/4 安装依赖(国内源加速,失败自动换源重试)"
+PY=.venv/bin/python
+install_deps() {
+  $PY -m pip install -e ".[dev]" -i "$1" -q || return 1
+}
+if ! install_deps https://pypi.tuna.tsinghua.edu.cn/simple; then
+  echo "清华源失败,切换阿里源重试..."
+  install_deps https://mirrors.aliyun.com/pypi/simple/
+fi
 
 echo "==> 4/4 启动(浏览器打开 http://127.0.0.1:8000,Ctrl+C 停止)"
 if [ "$(grep -c 'mock' .env || true)" -gt 0 ]; then
