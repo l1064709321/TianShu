@@ -107,6 +107,8 @@ class Agent:
 
         for i in range(self.max_iterations):
             result = await self.provider.chat(history, tools=tools, cancel_event=self.cancelled)
+            if result.reasoning:
+                await self._emit("thinking", agent=self.name, content=result.reasoning)
             history.append(LLMMessage(role="assistant", content=result.content or "", tool_calls=result.tool_calls))
 
             if not result.has_tool_calls:

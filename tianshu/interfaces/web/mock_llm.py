@@ -44,9 +44,13 @@ def build_mock_app() -> FastAPI:
                             "function": {"name": first, "arguments": json.dumps(fn, ensure_ascii=False)},
                         }
                     ],
+                    reasoning=f"用户请求「{last_user[:60]}」,需要获取更多信息,我选择调用工具 {first} 来完成任务。",
                 )
 
-        return _resp(content=f"[mock 回复] 收到: {content[:100]}")
+        return _resp(
+            content=f"[mock 回复] 收到: {content[:100]}",
+            reasoning=f"用户请求「{last_user[:60]}」,信息已足够,我直接整理回答。",
+        )
 
     return app
 
@@ -80,12 +84,14 @@ def _pick_tool_fn(name: str, last_user: str) -> dict:
     return {}
 
 
-def _resp(content: str | None, tool_calls: list | None = None) -> JSONResponse:
+def _resp(content: str | None, tool_calls: list | None = None, reasoning: str | None = None) -> JSONResponse:
     msg: dict = {}
     if content is not None:
         msg["content"] = content
     if tool_calls:
         msg["tool_calls"] = tool_calls
+    if reasoning:
+        msg["reasoning_content"] = reasoning
     return JSONResponse(
         {
             "id": "chatcmpl-mock",

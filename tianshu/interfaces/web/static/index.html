@@ -35,6 +35,9 @@
   .approve { background: #15803d; } .approve:hover { background: #16a34a; }
   .reject { background: #b91c1c; } .reject:hover { background: #dc2626; }
   .tool { font-size: 12px; color: #7cc4ff; margin: 2px 0; }
+  .thinking { margin: 3px 0; padding: 5px 10px; background: #141922; border-left: 3px solid #4b5563; border-radius: 4px; font-size: 12px; color: #9ca3af; white-space: pre-wrap; }
+  .thinking summary { cursor: pointer; color: #8b93a3; font-size: 11px; }
+  .tool-args { font-size: 11px; color: #64748b; margin-left: 8px; font-family: monospace; }
   #status { font-size: 12px; }
   .agent-run { font-size: 12px; color: #8b93a3; margin: 2px 0; }
   #layout { flex: 1; display: flex; overflow: hidden; }
@@ -323,8 +326,12 @@ function renderActivity() {
       html += `<div class="subtask running">▶ [${a.data.worker}] ${a.data.goal}</div>`;
     } else if (a.event === 'subtask_done') {
       html += `<div class="subtask done">✔ [${a.data.worker}] ${a.data.status}</div>`;
+    } else if (a.event === 'thinking') {
+      const txt = (a.data.content || '').replace(/</g, '&lt;');
+      html += `<details class="thinking"><summary>【思考】${a.data.agent || 'agent'}</summary>${txt}</details>`;
     } else if (a.event === 'agent_action' && a.data.action === 'tool') {
-      html += `<div class="tool">🔧 ${a.data.agent} 调用 ${a.data.tool}</div>`;
+      const args = a.data.args ? `<span class="tool-args">${JSON.stringify(a.data.args).replace(/</g, '&lt;').slice(0, 120)}</span>` : '';
+      html += `<div class="tool">🔧 ${a.data.agent} 调用 ${a.data.tool}${args}</div>`;
     } else if (a.event === 'agent_action' && a.data.action === 'call_agent') {
       html += `<div class="tool">⇄ ${a.data.agent} 调用 ${a.data.target}</div>`;
     } else if (a.event === 'phase') {

@@ -109,4 +109,5 @@ class OpenAIProvider(BaseProvider):
             content=content,
             tool_calls=tool_calls,
             usage=data.get("usage"),
+            reasoning=msg.get("reasoning_content") or None,
         )

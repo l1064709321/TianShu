@@ -46,6 +46,7 @@ class LLMResult:
     content: str | None
     tool_calls: list[ToolCall] | None = None
     usage: dict[str, int] | None = None
+    reasoning: str | None = None
 
     @property
     def has_tool_calls(self) -> bool:
