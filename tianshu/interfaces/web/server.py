@@ -169,6 +169,8 @@ async def session_messages(session_id: str):
     tianshu: TianshuApp = app.state.tianshu
     if tianshu.sessions is None:
         return {"messages": []}
+    if not await tianshu.sessions.get_session(session_id):
+        return {"messages": [], "error": "会话不存在"}
     return {"messages": await tianshu.sessions.list_messages(session_id)}
 
 

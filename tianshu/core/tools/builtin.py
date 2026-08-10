@@ -18,7 +18,6 @@ from tianshu.core.tools.registry import ToolRegistry, RAW
 SHELL_ALLOWED = {
     "ls", "cat", "head", "tail", "wc", "grep", "rg", "find", "pwd",
     "echo", "sort", "uniq", "diff", "tree", "stat", "file", "which",
-    "python", "python3", "pip", "pip3", "pytest", "git", "node", "npm", "npm.cmd",
 }
 
 SHELL_BANNED_FLAGS = {"-rf", "--recursive", "-exec", "-execdir", "-delete", ">", ">>", "|", ";", "&&", "||", "$(", "`"}
@@ -51,7 +50,7 @@ def _is_private_host(host: str) -> bool:
     return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast
 
 
-async def fetch_url_guarded(url: str, timeout: int = 30) -> str:
+async def fetch_url_guarded(url: str, timeout: int = 30, _depth: int = 0) -> str:
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme not in ("http", "https"):
         raise PermissionError(f"仅允许 http/https 协议: {parsed.scheme}")
@@ -67,9 +66,17 @@ async def fetch_url_guarded(url: str, timeout: int = 30) -> str:
     for ip in resolved:
         if _is_private_host(ip):
             raise PermissionError(f"域名解析到内网地址,已拦截: {ip}")
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
         resp = await client.get(url, headers={"User-Agent": "Tianshu/0.1"})
-        resp.raise_for_status()
+    if resp.status_code in (301, 302, 303, 307, 308):
+        if _depth >= 5:
+            raise PermissionError("重定向次数过多")
+        loc = resp.headers.get("location")
+        if not loc:
+            raise PermissionError(f"重定向响应缺少 Location: {url}")
+        next_url = str(urllib.parse.urljoin(url, loc))
+        return await fetch_url_guarded(next_url, timeout, _depth + 1)
+    resp.raise_for_status()
     if "text/html" in resp.headers.get("content-type", ""):
         soup = BeautifulSoup(resp.text, "html.parser")
         for tag in soup(["script", "style", "noscript", "svg"]):
@@ -127,5 +134,7 @@ def register_builtin_tools(registry: ToolRegistry) -> None:
 
     @registry.decorator("search_files", description="按 glob 模式搜索工作区文件", format_result=RAW)
     async def search_files(pattern: str) -> str:
+        if ".." in pattern:
+            raise PermissionError("禁止包含 .. 的搜索模式")
         hits = [str(p.relative_to(WORKSPACE_DIR)) for p in WORKSPACE_DIR.glob(pattern)]
         return "\n".join(hits) if hits else "(无匹配)"
