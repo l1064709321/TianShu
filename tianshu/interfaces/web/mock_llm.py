@@ -12,6 +12,10 @@ def build_mock_app() -> FastAPI:
 
     app = FastAPI(title="tianshu-mock-llm")
 
+    @app.get("/healthz")
+    async def healthz():
+        return {"status": "ok"}
+
     @app.post("/v1/chat/completions")
     async def chat(req: Request):
         body = await req.json()

@@ -2,6 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import subprocess
+import sys
+import time
+import urllib.parse
+import urllib.request
 
 import typer
 from rich.console import Console
@@ -140,7 +145,40 @@ def serve(
 
     from tianshu.interfaces.web.server import app
 
+    _ensure_mockllm_if_needed()
     uvicorn.run(app, host=host, port=port)
+
+
+def _ensure_mockllm_if_needed() -> None:
+    from tianshu.config import get_provider
+
+    provider = get_provider()
+    if provider.name != "mock":
+        return
+    url = urllib.parse.urlparse(provider.base_url)
+    host = url.hostname or "127.0.0.1"
+    port = url.port or 9100
+    base = f"http://{host}:{port}"
+    try:
+        urllib.request.urlopen(f"{base}/healthz", timeout=1)
+        return
+    except Exception:  # noqa: BLE001
+        pass
+    subprocess.Popen(
+        [sys.executable, "-m", "tianshu", "mockllm", "--host", host, "--port", str(port)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    for _ in range(20):
+        time.sleep(0.5)
+        try:
+            urllib.request.urlopen(f"{base}/healthz", timeout=1)
+            print(f"==> mockllm 已自动就绪: {base}(离线 mock 模式)")
+            return
+        except Exception:  # noqa: BLE001
+            continue
+    print("警告: mockllm 启动失败,对话将不可用,请检查端口占用", file=sys.stderr)
 
 
 @app.command()
