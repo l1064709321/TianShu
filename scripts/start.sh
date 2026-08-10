@@ -17,7 +17,7 @@ else
   echo "==> 2/4 .env 已存在,保留"
 fi
 
-echo "==> 3/4 安装依赖(国内源加速,优先锁定版本,失败自动换源重试)"
+echo "==> 3/4 安装依赖(优先离线 wheel 包,其次国内源自动重试)"
 PY=.venv/bin/python
 install_deps() {
   if [ -f requirements.lock.txt ]; then
@@ -25,8 +25,30 @@ install_deps() {
   fi
   $PY -m pip install -e ".[dev]" -i "$1" -q || return 1
 }
-if ! install_deps https://pypi.tuna.tsinghua.edu.cn/simple; then
-  echo "清华源失败,切换阿里源重试..."
+install_offline() {
+  local dir="$1"
+  if [ -f requirements.lock.txt ]; then
+    $PY -m pip install --no-index --find-links "$dir" -r requirements.lock.txt -q || return 1
+  fi
+  $PY -m pip install --no-index --find-links "$dir" -e ".[dev]" -q || return 1
+}
+WHEELS="wheels/$(uname -s 2>/dev/null | tr '[:upper:]' '[:lower:]' | sed 's/darwin/macos/;s/mingw.*/windows/' || echo current)"
+if [ -d "$WHEELS" ]; then
+  echo "    检测到离线包 $WHEELS,离线安装(零网络)"
+  if ! install_offline "$WHEELS"; then
+    echo "    离线安装失败,回退在线源"
+    install_deps https://pypi.tuna.tsinghua.edu.cn/simple || \
+      install_deps https://mirrors.aliyun.com/pypi/simple/
+  fi
+elif [ -d wheels/current ]; then
+  echo "    检测到离线包 wheels/current,离线安装(零网络)"
+  if ! install_offline wheels/current; then
+    echo "    离线安装失败,回退在线源"
+    install_deps https://pypi.tuna.tsinghua.edu.cn/simple || \
+      install_deps https://mirrors.aliyun.com/pypi/simple/
+  fi
+elif ! install_deps https://pypi.tuna.tsinghua.edu.cn/simple; then
+  echo "    清华源失败,切换阿里源重试..."
   install_deps https://mirrors.aliyun.com/pypi/simple/
 fi
 

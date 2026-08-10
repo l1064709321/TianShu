@@ -40,7 +40,24 @@ bash scripts/build_sandbox_image.sh
 # 产物: lordofstars/tianshu(应用) + lordofstars/tianshu-sandbox(沙箱)
 ```
 
+国内镜像仓库双推(可选,国内拉取秒级):
+
+```bash
+TIANSHU_ACR_REGISTRY=registry.cn-hangzhou.aliyuncs.com \
+TIANSHU_ACR_NAMESPACE=lordofstars \
+bash scripts/build_sandbox_image.sh
+```
+
 镜像名可用环境变量覆盖:`TIANSHU_IMAGE` / `TIANSHU_SANDBOX_IMAGE`。
+
+### 完全离线安装(零网络)
+
+```bash
+bash scripts/make_offline_bundle.sh    # 预下载全部依赖 wheel 到 wheels/{平台}/
+bash scripts/start.sh                  # 检测到离线包后 --no-index 零网络安装
+```
+
+离线包可拷贝到无网机器,安装 100% 成功,不碰任何网络。
 
 ## 项目目标
 
