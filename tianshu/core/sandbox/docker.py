@@ -7,7 +7,7 @@ import shlex
 from pathlib import Path
 from typing import Any
 
-from tianshu.config import PROJECT_ROOT
+from tianshu.config import PROJECT_ROOT, SENSITIVE_DIR
 from tianshu.core.log import get_logger
 
 logger = get_logger("sandbox.docker")

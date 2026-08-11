@@ -16,3 +16,4 @@ datastore.*
 *.db
 libpod/$
 wheels/
+.ts-secrets/

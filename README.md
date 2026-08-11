@@ -149,3 +149,5 @@ bash scripts/e2e_mock.sh   # 启动本地 mock LLM,验证主Agent拆解→调度
 Agent 执行 shell 命令默认走沙箱执行器:`tianshu/core/sandbox/`。有 Docker 时用一次性容器(`--network none` + 512MB 内存 + 预装依赖镜像,一键复用);无 Docker 自动降级为本地 `ulimit` 资源限制。均含超时强杀与进程数/内存上限。
 
 **安全边界**:shell 白名单仅允许无副作用的读取命令(`ls/cat/grep/find/echo` 等,解释器与包管理器一律禁止);`fetch_url` 逐跳校验重定向、DNS 解析后二次拦截内网;文件工具限定工作区内。Web 服务仅监听本机,无认证,请勿暴露到公网。
+
+**敏感临时区 `workspace/.ts-secrets/`**:Agent 可读写该区存放密钥/凭据(工具 `save_secret`/`clear_secrets`,或直接读写该路径)。该区已被 .gitignore 与 .dockerignore 排除,**不提交、不打包、不进镜像**,仅存于本机;用完可用 `clear_secrets` 清空。区内文件同样受命令白名单与路径钳制约束。

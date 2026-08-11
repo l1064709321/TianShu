@@ -35,6 +35,7 @@ settings = Settings()
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = PROJECT_ROOT / "skills"
 WORKSPACE_DIR = PROJECT_ROOT / "workspace"
+SENSITIVE_DIR = WORKSPACE_DIR / ".ts-secrets"
 
 
 def get_provider(name: str | None = None) -> LLMProviderConfig:
