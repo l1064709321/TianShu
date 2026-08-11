@@ -20,7 +20,7 @@ VENV_BIN = PROJECT_ROOT / ".venv" / "bin"
 
 
 def _sandbox_env(env_extra: dict[str, str] | None = None) -> dict[str, str]:
-    env = dict(os.environ)
+    env = {k: v for k, v in os.environ.items() if not _is_sensitive_env(k)}
     env["TZ"] = "UTC"
     env["PYTHONUNBUFFERED"] = "1"
     if VENV_BIN.exists():
@@ -28,6 +28,15 @@ def _sandbox_env(env_extra: dict[str, str] | None = None) -> dict[str, str]:
     if env_extra:
         env.update(env_extra)
     return env
+
+
+def _is_sensitive_env(key: str) -> bool:
+    u = key.upper()
+    if u in ("PATH", "TZ", "PYTHONUNBUFFERED", "HOME", "LANG", "LC_ALL"):
+        return False
+    if u.startswith("TIANSHU_") and any(s in u for s in ("KEY", "TOKEN", "SECRET", "PASSWORD")):
+        return True
+    return any(s in u for s in ("API_KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL", "AUTH"))
 
 
 def _resource_limits() -> None:
