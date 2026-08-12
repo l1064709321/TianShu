@@ -143,13 +143,15 @@ async def test_secret_zone_writable_and_readable():
         assert "sk-test-123" in out2
         save = registry.get("save_secret")
         assert save is not None
-        res = await save.func("tmpkey2", "sk-456")
+        res = await save.func("my_tool_key-2", "sk-456")
         assert "保存" in res
-        out3 = await run_shell_guarded("cat .ts-secrets/tmpkey2", cwd=WORKSPACE_DIR)
+        with pytest.raises(PermissionError):
+            await save.func("../../evil", "x")
+        out3 = await run_shell_guarded("cat .ts-secrets/my_tool_key-2", cwd=WORKSPACE_DIR)
         assert "sk-456" in out3
     finally:
         (SENSITIVE_DIR / "tmpkey").unlink(missing_ok=True)
-        (SENSITIVE_DIR / "tmpkey2").unlink(missing_ok=True)
+        (SENSITIVE_DIR / "my_tool_key-2").unlink(missing_ok=True)
 
 
 async def test_secret_zone_still_blocks_outside():

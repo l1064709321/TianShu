@@ -173,8 +173,8 @@ def register_builtin_tools(registry: ToolRegistry) -> None:
         requires_review=True,
     )
     async def save_secret(name: str, content: str) -> str:
-        if "/" in name or ".." in name or not name.isalnum():
-            raise PermissionError("密钥名仅允许字母数字")
+        if "/" in name or "\\" in name or ".." in name or not name.replace("_", "").replace("-", "").isalnum():
+            raise PermissionError("密钥名仅允许字母数字、下划线、连字符")
         p = _ensure_inside_workspace(SENSITIVE_DIR / name)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
