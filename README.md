@@ -27,7 +27,7 @@ docker pull lordofstars/tianshu
 docker run -p 8000:8000 lordofstars/tianshu
 ```
 
-镜像内含完整代码 + 锁定依赖,拉取即得可运行环境。浏览器打开 http://localhost:8000;连接真实模型挂载 .env:
+镜像内含完整代码 + 锁定依赖,拉取即得可运行环境。浏览器打开 http://localhost:8000(或脚本自动分配的空闲端口);连接真实模型挂载 .env:
 
 ```bash
 docker run -p 8000:8000 -v "$PWD/.env:/app/.env" lordofstars/tianshu
@@ -121,7 +121,7 @@ EOF
 ```bash
 .venv/bin/tianshu chat          # 交互式聊天(主 Agent 调度)
 .venv/bin/tianshu ask "帮我抓取 https://example.com 并总结"
-.venv/bin/tianshu serve         # Web 界面: http://localhost:8000
+.venv/bin/tianshu serve         # Web 界面: http://localhost:8000(或自动检测的空闲端口)
 .venv/bin/tianshu desktop       # 桌面端(原生窗口,自动回退浏览器)
 .venv/bin/tianshu providers     # 查看支持的 LLM 厂商
 ```

@@ -52,8 +52,20 @@ elif ! install_deps https://pypi.tuna.tsinghua.edu.cn/simple; then
   install_deps https://mirrors.aliyun.com/pypi/simple/
 fi
 
-echo "==> 4/4 启动(浏览器打开 http://127.0.0.1:8000,Ctrl+C 停止)"
+# 脚本启动时自动选择空闲端口(8000-9000)
+pick_port() {
+  for p in $(seq 8000 9000); do
+    if ! ss -tln 2>/dev/null | grep -q ":$p " && ! netstat -tln 2>/dev/null | grep -q ":$p "; then
+      echo "$p"
+      return 0
+    fi
+  done
+  echo "8000"
+}
+PORT=$(pick_port)
+
+echo "==> 4/4 启动(浏览器打开 http://127.0.0.1:$PORT,Ctrl+C 停止)"
 if [ "$(grep -c 'mock' .env || true)" -gt 0 ]; then
-  (setsid .venv/bin/tianshu mockllm >/tmp/ts-mock.log 2>&1 &) 
+  (setsid .venv/bin/tianshu mockllm --port 9100 >/tmp/ts-mock.log 2>&1 &)
 fi
-.venv/bin/tianshu serve --port 8000
+.venv/bin/tianshu serve --host 127.0.0.1 --port $PORT
