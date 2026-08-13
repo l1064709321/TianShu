@@ -5,7 +5,16 @@ cd "$(dirname "$0")/.."
 
 echo "==> 1/4 准备 Python 虚拟环境"
 if [ ! -d .venv ]; then
-  python3 -m venv .venv
+  if ! python3 -m venv .venv 2>/dev/null; then
+    echo "    venv 创建失败,尝试安装 python3-venv..."
+    if command -v apt >/dev/null 2>&1; then
+      PY_VER=$(python3 -c 'import sys;print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+      sudo apt-get update -qq && sudo apt-get install -y -qq "python${PY_VER}-venv" || true
+    elif command -v yum >/dev/null 2>&1; then
+      sudo yum install -y python3-virtualenv || true
+    fi
+    python3 -m venv .venv
+  fi
 fi
 if [ ! -f .env ]; then
   echo "==> 2/4 未发现 .env,生成 mock 离线配置(想接真实模型请编辑 .env)"
@@ -55,10 +64,20 @@ fi
 # 脚本启动时自动选择空闲端口(8000-9000)
 pick_port() {
   for p in $(seq 8000 9000); do
-    if ! ss -tln 2>/dev/null | grep -q ":$p " && ! netstat -tln 2>/dev/null | grep -q ":$p "; then
-      echo "$p"
-      return 0
+    if ! python3 -c "
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+try:
+    s.bind(('', $p))
+    s.close()
+    exit(0)
+except:
+    exit(1)
+" 2>/dev/null; then
+      continue
     fi
+    echo "$p"
+    return 0
   done
   echo "8000"
 }
