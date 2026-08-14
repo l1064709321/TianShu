@@ -30,7 +30,9 @@ docker pull lordofstars/tianshu
 docker run -p 8000:8000 lordofstars/tianshu
 ```
 
-打开 http://localhost:8000 即可对话(默认离线 mock 模式)。
+打开 http://localhost:8000 即可对话(默认离线 mock 模式;端口映射固定 8000,可用 `-p 宿主机端口:8000` 修改)。
+
+多模型接入后内置 LiteLLM 风格智能调度器:五种路由策略(加权随机/最少占用/配额/延迟/成本)、加权故障转移、熔断冷却、上下文超长与内容策略专用降级链。
 
 ## 连接真实模型
 

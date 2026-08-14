@@ -18,7 +18,7 @@ cd tianshu
 bash scripts/start.sh        # 自动装依赖、生成配置、启动 Web(离线 mock 模式)
 ```
 
-浏览器打开 http://localhost:8000 即可对话。连接真实模型:编辑 `.env` 填入你的厂商配置(见下方"配置模型"),重启 `bash scripts/start.sh`。
+浏览器打开脚本输出提示的地址即可对话(端口在 8000-9000 间自动挑选空闲端口,默认 `http://localhost:8000`)。连接真实模型:编辑 `.env` 填入你的厂商配置(见下方"配置模型"),重启 `bash scripts/start.sh`。
 
 ## 一键 Docker 运行(无需装 Python/依赖)
 
@@ -27,7 +27,7 @@ docker pull lordofstars/tianshu
 docker run -p 8000:8000 lordofstars/tianshu
 ```
 
-镜像内含完整代码 + 锁定依赖,拉取即得可运行环境。浏览器打开 http://localhost:8000(或脚本自动分配的空闲端口);连接真实模型挂载 .env:
+镜像内含完整代码 + 锁定依赖,拉取即得可运行环境。浏览器打开 http://localhost:8000(Docker 映射固定 8000,可用 `-p 宿主机端口:8000` 改);连接真实模型挂载 .env:
 
 ```bash
 docker run -p 8000:8000 -v "$PWD/.env:/app/.env" lordofstars/tianshu
@@ -88,7 +88,7 @@ tianshu/
 │   ├── tools/          # 工具注册表与内置工具(含沙箱)
 │   ├── sandbox/        # 沙箱执行器(Docker 优先,local 降级)
 │   ├── skills/         # 技能系统与内置技能
-│   ├── llm/            # 模型 Provider 适配层
+│   ├── llm/            # 模型 Provider 适配层 + 智能调度器(dispatcher)
 │   ├── memory.py       # 三层记忆 + 缓存命中监测
 │   ├── review/         # 审核/审批系统
 │   ├── session.py      # 会话持久化
@@ -98,7 +98,7 @@ tianshu/
 │   ├── web/            # Web API + WS 事件流 + 前端
 │   └── desktop/        # 桌面端
 ├── scripts/            # 一键启动等脚本
-└── tests/              # 51 项测试
+└── tests/              # 83 项测试
 ```
 
 ## 快速开始(手动)
@@ -121,7 +121,7 @@ EOF
 ```bash
 .venv/bin/tianshu chat          # 交互式聊天(主 Agent 调度)
 .venv/bin/tianshu ask "帮我抓取 https://example.com 并总结"
-.venv/bin/tianshu serve         # Web 界面: http://localhost:8000(或自动检测的空闲端口)
+.venv/bin/tianshu serve         # Web 界面(默认 8000;start.sh 启动则自动选空闲端口)
 .venv/bin/tianshu desktop       # 桌面端(原生窗口,自动回退浏览器)
 .venv/bin/tianshu providers     # 查看支持的 LLM 厂商
 ```
@@ -141,7 +141,7 @@ EOF
 ```bash
 bash scripts/e2e_mock.sh   # 启动本地 mock LLM,验证主Agent拆解→调度→汇总全流程
 .venv/bin/tianshu doctor   # 检查 .env 配置与真实模型连接
-.venv/bin/python -m pytest tests/ -q   # 51 项测试
+.venv/bin/python -m pytest tests/ -q   # 83 项测试
 ```
 
 ### 沙箱说明
@@ -151,3 +151,15 @@ Agent 执行 shell 命令默认走沙箱执行器:`tianshu/core/sandbox/`。有 
 **安全边界**:shell 白名单仅允许无副作用的读取命令(`ls/cat/grep/find/echo` 等,解释器与包管理器一律禁止);`fetch_url` 逐跳校验重定向、DNS 解析后二次拦截内网;文件工具限定工作区内。Web 服务仅监听本机,无认证,请勿暴露到公网。
 
 **敏感临时区 `workspace/.ts-secrets/`**:Agent 可读写该区存放密钥/凭据(工具 `save_secret`/`clear_secrets`,或直接读写该路径)。该区已被 .gitignore 与 .dockerignore 排除,**不提交、不打包、不进镜像**,仅存于本机;用完可用 `clear_secrets` 清空。区内文件同样受命令白名单与路径钳制约束。
+
+## LLM 智能调度(tianshu/core/llm/dispatcher.py)
+
+多模型接入后,调度器按 LiteLLM 官方设计自动路由与容灾:
+
+- **五种路由策略**:`simple-shuffle`(默认,按权重/配额加权随机)、`least-busy`(最少活跃请求)、`usage-based-routing`(按 RPM/TPM 利用率)、`latency-based-routing`(滑动窗口最低延迟)、`cost-based-routing`(最低成本)。
+- **加权故障转移**:同组部署失败后排除并重新按权选择,组内全部耗尽才跨组 fallback(上限 `max_fallbacks`)。
+- **熔断冷却**:部署连续失败达 `allowed_fails` 次进入 `cooldown_time` 冷却,期间不接流量,到期自动恢复。
+- **三层分类 fallback**:普通错误 / 上下文超长(`context_window_fallbacks`,自动识别 ContextWindowExceeded)/ 内容策略拒绝(`content_policy_fallbacks`),分别走不同降级链。
+- **统计可观测**:每次调用记录延迟滑动窗口与成败计数,`get_stats()` 可查。
+
+`.env` 中配置多个 provider 后,调度器按组注册;示例见上文"配置模型"。
