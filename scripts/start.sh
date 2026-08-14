@@ -87,25 +87,29 @@ else
   fi
 fi
 
-# 脚本启动时自动选择空闲端口(8000-9000)
+# 脚本启动时自动选择空闲端口:8000-9000 内随机探测,被占用就切换下一个
 pick_port() {
-  for p in $(seq 8000 9000); do
-    if ! python3 -c "
+  python3 - "$@" <<'EOF'
+import random
 import socket
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-try:
-    s.bind(('', $p))
-    s.close()
-    exit(0)
-except:
-    exit(1)
-" 2>/dev/null; then
-      continue
-    fi
-    echo "$p"
-    return 0
-  done
-  echo "8000"
+import sys
+
+start, end = 8000, 9000
+if len(sys.argv) > 2:
+    start, end = int(sys.argv[1]), int(sys.argv[2])
+ports = list(range(start, end + 1))
+random.shuffle(ports)
+for p in ports:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind(("", p))
+        print(p)
+        sys.exit(0)
+    except OSError:
+        continue
+print(start)
+EOF
 }
 PORT=$(pick_port)
 
