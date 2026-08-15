@@ -49,7 +49,13 @@ install_deps() {
     return 1
   fi
   if [ -f requirements.lock.txt ]; then
-    run_with_timeout $PY -m pip install $PIP_OPTS -r requirements.lock.txt -i "$1" -q || return 1
+    if run_with_timeout $PY -m pip install $PIP_OPTS -r requirements.lock.txt -i "$1" -q; then
+      echo "      ✅ requirements.lock.txt 锁定版本安装成功"
+    else
+      echo "      ⚠️ 锁文件部分版本在当前源不可用,改用 pyproject.toml 宽松版本重试..."
+      run_with_timeout $PY -m pip install $PIP_OPTS -e ".[dev]" -i "$1" -q || return 1
+      return 0
+    fi
   fi
   run_with_timeout $PY -m pip install $PIP_OPTS -e ".[dev]" -i "$1" -q || return 1
 }
