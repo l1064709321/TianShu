@@ -26,14 +26,32 @@ else
   echo "==> 2/4 .env 已存在,保留"
 fi
 
-echo "==> 3/4 安装依赖(优先国外源,国内源5分钟超时切换)"
+echo "==> 3/4 安装依赖(逐源快速探测,失败自动切换;单源最长 ${SOURCE_TIMEOUT:-90}s)"
 PY=.venv/bin/python
-PIP_TIMEOUT=300
-install_deps() {
-  if [ -f requirements.lock.txt ]; then
-    $PY -m pip install --timeout "$PIP_TIMEOUT" -r requirements.lock.txt -i "$1" -q || return 1
+PIP_OPTS="--timeout 15 --retries 1"
+SOURCE_TIMEOUT="${SOURCE_TIMEOUT:-90}"
+run_with_timeout() {
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$SOURCE_TIMEOUT" "$@"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$SOURCE_TIMEOUT" "$@"
+  else
+    "$@"
   fi
-  $PY -m pip install --timeout "$PIP_TIMEOUT" -e ".[dev]" -i "$1" -q || return 1
+}
+probe() {
+  command -v curl >/dev/null 2>&1 || return 0
+  curl -fsS --connect-timeout 5 --max-time 8 -o /dev/null "$1" 2>/dev/null
+}
+install_deps() {
+  if ! probe "$1"; then
+    echo "      ❌ ${1} 不可达,跳过"
+    return 1
+  fi
+  if [ -f requirements.lock.txt ]; then
+    run_with_timeout $PY -m pip install $PIP_OPTS -r requirements.lock.txt -i "$1" -q || return 1
+  fi
+  run_with_timeout $PY -m pip install $PIP_OPTS -e ".[dev]" -i "$1" -q || return 1
 }
 install_offline() {
   local dir="$1"
@@ -43,47 +61,40 @@ install_offline() {
   $PY -m pip install --no-index --find-links "$dir" -e ".[dev]" -q || return 1
 }
 WHEELS="wheels/$(uname -s 2>/dev/null | tr '[:upper:]' '[:lower:]' | sed 's/darwin/macos/;s/mingw.*/windows/' || echo current)"
+OFFLINE_OK=0
 if [ -d "$WHEELS" ]; then
   echo "    检测到离线包 $WHEELS,离线安装(零网络)"
-  if ! install_offline "$WHEELS"; then
-    echo "    离线安装失败,回退在线源"
-  fi
+  if install_offline "$WHEELS"; then OFFLINE_OK=1; else echo "    ❌ 离线安装失败,回退在线源"; fi
 elif [ -d wheels/current ]; then
   echo "    检测到离线包 wheels/current,离线安装(零网络)"
-  if ! install_offline wheels/current; then
-    echo "    离线安装失败,回退在线源"
+  if install_offline wheels/current; then OFFLINE_OK=1; else echo "    ❌ 离线安装失败,回退在线源"; fi
+fi
+if [ "$OFFLINE_OK" -eq 0 ]; then
+  SOURCES=()
+  if [ -n "${TIANSHU_PIP_MIRROR:-}" ]; then
+    SOURCES+=("$TIANSHU_PIP_MIRROR")
   fi
-else
-  # 优先国外源
-  echo "    尝试 PyPI 官方源..."
-  if install_deps https://pypi.org/simple; then
-    echo "    ✅ PyPI 官方源成功"
-  else
-    echo "    PyPI 失败,依次尝试国内镜像(各5分钟超时)..."
-    # 国内源依次尝试:清华→阿里→华为→腾讯云
-    declare -a CN_SOURCES=(
-      "https://pypi.tuna.tsinghua.edu.cn/simple"
-      "https://mirrors.aliyun.com/pypi/simple/"
-      "https://mirrors.huaweicloud.com/repository/pypi/simple"
-      "https://pypi.tuna.tsinghua.edu.cn/simple"
-      "https://pypi.tuna.tsinghua.edu.cn/simple/"
-      "https://mirrors.aliyun.com/pypi/simple"
-    )
-    INSTALLED=0
-    for src in "${CN_SOURCES[@]}"; do
-      echo "    尝试 ${src}..."
-      if install_deps "$src"; then
-        echo "    ✅ 国内源成功:${src}"
-        INSTALLED=1
-        break
-      else
-        echo "    ❌ ${src} 失败,切换下一个..."
-      fi
-    done
-    if [ "$INSTALLED" -eq 0 ]; then
-      echo "    ⚠️ 所有源均失败,请检查网络或手动安装依赖"
-      exit 1
+  SOURCES+=(
+    "https://pypi.org/simple"
+    "https://pypi.tuna.tsinghua.edu.cn/simple"
+    "https://mirrors.aliyun.com/pypi/simple/"
+    "https://mirrors.huaweicloud.com/repository/pypi/simple"
+    "https://mirrors.cloud.tencent.com/pypi/simple"
+  )
+  INSTALLED=0
+  for src in "${SOURCES[@]}"; do
+    echo "    尝试 ${src} ($(date +%H:%M:%S))..."
+    if install_deps "$src"; then
+      echo "    ✅ 依赖安装成功:${src}"
+      INSTALLED=1
+      break
+    else
+      echo "    ❌ ${src} 失败/超时,立即切换下一个源"
     fi
+  done
+  if [ "$INSTALLED" -eq 0 ]; then
+    echo "    ⚠️ 所有源均失败,请检查网络或手动安装依赖"
+    exit 1
   fi
 fi
 
