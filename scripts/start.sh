@@ -43,6 +43,18 @@ probe() {
   command -v curl >/dev/null 2>&1 || return 0
   curl -fsS --connect-timeout 5 --max-time 8 -o /dev/null "$1" 2>/dev/null
 }
+install_project() {
+  if run_with_timeout $PY -m pip install $PIP_OPTS -e ".[dev]" -i "$1" -q; then
+    return 0
+  fi
+  echo "      ⚠️ 编辑安装失败(可能 pip 过旧),升级 pip 后重试..."
+  run_with_timeout $PY -m pip install $PIP_OPTS -U pip -i "$1" -q || true
+  if run_with_timeout $PY -m pip install $PIP_OPTS -e ".[dev]" -i "$1" -q; then
+    return 0
+  fi
+  echo "      ⚠️ 编辑安装仍失败,改用普通模式安装..."
+  run_with_timeout $PY -m pip install $PIP_OPTS ".[dev]" -i "$1" -q
+}
 install_deps() {
   if ! probe "$1"; then
     echo "      ❌ ${1} 不可达,跳过"
@@ -53,11 +65,11 @@ install_deps() {
       echo "      ✅ requirements.lock.txt 锁定版本安装成功"
     else
       echo "      ⚠️ 锁文件部分版本在当前源不可用,改用 pyproject.toml 宽松版本重试..."
-      run_with_timeout $PY -m pip install $PIP_OPTS -e ".[dev]" -i "$1" -q || return 1
-      return 0
+      install_project "$1"
+      return $?
     fi
   fi
-  run_with_timeout $PY -m pip install $PIP_OPTS -e ".[dev]" -i "$1" -q || return 1
+  install_project "$1"
 }
 install_offline() {
   local dir="$1"
