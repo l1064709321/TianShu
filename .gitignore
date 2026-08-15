@@ -17,3 +17,5 @@ datastore.*
 libpod/$
 wheels/
 .ts-secrets/
+config/models.json
+config/*.tmp

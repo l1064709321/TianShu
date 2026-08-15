@@ -62,11 +62,12 @@ bash scripts/start.sh                  # 检测到离线包后 --no-index 零网
 ## 项目目标
 
 - **多 Agent 协同**:一个主 Agent(Orchestrator)调度多个子 Agent(Worker),子 Agent 之间可相互调用,主 Agent 负责任务分解与结果汇总。
-- **技能系统**:Agent 可根据技能执行任务——写代码、自然语言聊天、抓取网页等。
+- **技能系统**:Agent 可根据技能执行任务——写代码、自然语言对话、抓取网页等。
 - **工具系统**:Agent 可调用任意注册工具(文件操作、shell、HTTP 等),命令执行默认走沙箱(Docker 容器隔离,无 Docker 自动降级为本地资源限制)。
 - **审核系统**:高危操作执行前需经过审批。
 - **记忆系统**:三层记忆(短期对话/中期摘要/长期 PROJECT_MEMORY.md),实时命中率监测。
 - **多端界面**:CLI、Web、桌面端三端。
+- **模型池**:内置国内外主流厂商目录(OpenAI/Claude/Grok/Gemini/DeepSeek/Qwen/GLM/Kimi/Ollama/Agnes 等),Web 端可视化接入、多 Key 管理与在线刷新模型列表。
 - **多模型支持**:兼容除 Claude 外的所有主流 LLM(OpenAI 兼容接口、本地 Ollama、多家厂商),可通过配置切换。
 - **可部署**:以服务方式部署运行。
 
@@ -75,8 +76,8 @@ bash scripts/start.sh                  # 检测到离线包后 --no-index 零网
 - 后端核心:Python 3.11+ / asyncio / FastAPI
 - 配置与校验:pydantic
 - CLI:typer + rich
-- Web:FastAPI + WebSocket + 前端框架(待定)
-- 桌面端:待定(Tauri / Electron)
+- Web:FastAPI + WebSocket + 原生 JS 单页(模型池面板)
+- 桌面端:pywebview 壳
 
 ## 架构
 
@@ -89,16 +90,18 @@ tianshu/
 │   ├── sandbox/        # 沙箱执行器(Docker 优先,local 降级)
 │   ├── skills/         # 技能系统与内置技能
 │   ├── llm/            # 模型 Provider 适配层 + 智能调度器(dispatcher)
+│   ├── modelpool/      # 模型池:内置厂商目录 + 多 Key 存储 + 在线刷新
 │   ├── memory.py       # 三层记忆 + 缓存命中监测
 │   ├── review/         # 审核/审批系统
 │   ├── session.py      # 会话持久化
 │   └── config.py       # 全局配置
+├── config/             # 模型池持久化(models.json,多 Key 掩码存储)
 ├── interfaces/
 │   ├── cli/            # 终端交互
 │   ├── web/            # Web API + WS 事件流 + 前端
 │   └── desktop/        # 桌面端
 ├── scripts/            # 一键启动等脚本
-└── tests/              # 83 项测试
+└── tests/              # 92 项测试
 ```
 
 ## 快速开始(手动)
@@ -115,6 +118,16 @@ TIANSHU_DEFAULT_PROVIDER=ollama
 TIANSHU_PROVIDERS=[{"name":"ollama","base_url":"http://localhost:11434/v1","api_key":"","model":"qwen2.5"}]
 EOF
 ```
+
+### 模型池(Web 端可视化接入)
+
+`tianshu serve` 启动后,点击页头「模型池」按钮:
+
+- **内置厂商目录**:国外(OpenAI/GPT、Anthropic Claude、xAI Grok、Google Gemini、Sapiens Agnes)、国内(DeepSeek、通义 Qwen、智谱 GLM、Kimi、文心、混元、豆包、MiniMax、讯飞星火)、本地(Ollama)。
+- **接入**:粘贴厂商 API Key → 「测试连接」验证 → 「接入」自动写入 `config/models.json` 并热切换(不重启、不丢会话)。
+- **多 Key**:同厂商可配多个 Key,输入栏可选择首选 Key;发送时若首选 Key 返回 401/403 判定过期,调度器自动切换下一个有效 Key,全部失效才报错。
+- **在线刷新**:已接入厂商点击「刷新模型列表」,调官方 `/v1/models` 拉取最新模型。
+- Claude 因非 OpenAI 协议不可被天枢调用,但可在池中保存配置供外部项目使用(标记「仅外部配置」)。
 
 ### 使用
 

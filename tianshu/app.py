@@ -8,6 +8,8 @@ from tianshu.config import SKILLS_DIR, get_provider
 from tianshu.core.agent.runtime import Agent, AgentResult, MessageBus, build_agent_call_tool
 from tianshu.core.log import get_logger
 from tianshu.core.memory import CacheMonitor, ProjectMemory, load_conversation_context
+from tianshu.core.modelpool.service import KeySelectorProvider
+from tianshu.core.modelpool.store import PoolStore
 from tianshu.core.orchestrator.service import Orchestration, Orchestrator, _serialize_subtask
 from tianshu.core.review.system import ReviewSystem
 from tianshu.core.session import SessionStore
@@ -36,6 +38,7 @@ class TianshuApp:
     history_recent_keep: int = 6
     cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
     busy_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    pool_store: PoolStore | None = None
 
     def cancel(self) -> None:
         self.cancel_event.set()
@@ -45,6 +48,41 @@ class TianshuApp:
 
     def is_busy(self) -> bool:
         return self.busy_lock.locked()
+
+    def rebind_provider(
+        self,
+        provider_name: str,
+        base_url: str,
+        model: str,
+        api_key: str = "",
+        keys: list[dict] | None = None,
+        preferred_key: str = "",
+        temperature: float = 0.2,
+        max_tokens: int | None = None,
+    ) -> None:
+        """热切换模型:替换所有 Agent 的 provider,不重建 App,会话与记忆保留。"""
+        for a in self.agents.values():
+            children = [k for k in (keys or []) if k.get("value")]
+            if children:
+                sel = KeySelectorProvider(
+                    provider_name, base_url, model, children,
+                    preferred_key=preferred_key,
+                    temperature=temperature, max_tokens=max_tokens,
+                )
+                sel.bind_store(self.pool_store) if self.pool_store else None
+                sel.usage_hook = self.cache_monitor.record if self.cache_monitor else None
+                a.provider = sel
+            else:
+                from tianshu.core.llm.factory import create_provider
+
+                prov = create_provider(provider_name, base_url, model, api_key, temperature=temperature, max_tokens=max_tokens)
+                if self.cache_monitor:
+                    prov.usage_hook = self.cache_monitor.record
+                a.provider = prov
+        self.logger.info(
+            "热切换模型: name=%s base=%s model=%s keys=%d preferred=%s",
+            provider_name, base_url, model, len(keys or []), bool(preferred_key),
+        )
 
     async def run_exclusive(self, coro):
         async with self.busy_lock:
@@ -152,7 +190,7 @@ class TianshuApp:
             provider = self.agents[self.default_worker].provider
             result = await provider.chat(prompt_msgs)
             new_summary = result.content or old_summary
-        except Exception:  # noqa: BLE001
+        except Exception:
             self.logger.exception("对话摘要压缩失败")
             return
         await self.sessions.save_summary(self.current_session, new_summary, len(batch))
@@ -240,4 +278,5 @@ def create_app(
         a.provider.usage_hook = monitor.record
     if session_db is not None:
         app.sessions = SessionStore(session_db)
+    app.pool_store = PoolStore()
     return app

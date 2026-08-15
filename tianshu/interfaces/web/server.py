@@ -11,8 +11,9 @@ from starlette.responses import FileResponse
 
 from tianshu.app import TianshuApp, create_app
 from tianshu.config import PROJECT_ROOT, settings
-from tianshu.core.review.system import ReviewSystem
-
+from tianshu.core.modelpool.catalog import default_catalog
+from tianshu.core.modelpool.service import pool_vendors, refresh_models, test_connection
+from tianshu.core.modelpool.store import PoolStore
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 HEARTBEAT_INTERVAL = 30
@@ -91,6 +92,194 @@ class SwitchRequest(BaseModel):
 class SessionRequest(BaseModel):
     session_id: str = ""
     title: str = ""
+
+
+class PoolTestRequest(BaseModel):
+    vendor: str
+    base_url: str
+    model: str
+    api_key: str = ""
+    api_style: str = "openai"
+
+
+class PoolKeyItem(BaseModel):
+    value: str = ""
+    label: str = ""
+
+
+class PoolConnectRequest(BaseModel):
+    vendor: str
+    base_url: str = ""
+    model: str = ""
+    api_style: str = "openai"
+    keys: list[PoolKeyItem] = []
+    run_validation: bool = True
+    set_default: bool = True
+
+
+class PoolKeyOpRequest(BaseModel):
+    vendor: str
+    action: str  # add | remove | toggle
+    value: str = ""
+    label: str = ""
+    kid: str = ""
+    enabled: bool = True
+
+
+class PoolDefaultRequest(BaseModel):
+    vendor: str
+    preferred_key: str = ""
+
+
+class PoolRefreshRequest(BaseModel):
+    vendor: str = ""
+
+
+def _rebind_from_store(tianshu: TianshuApp) -> None:
+    store = tianshu.pool_store
+    if store is None:
+        return
+    default = store.data.get("default_vendor", "")
+    v = store.vendor(default)
+    cat = default_catalog().get(default, {})
+    if not default or not v or not v.get("keys"):
+        return
+    base = v.get("base_url") or cat.get("base_url", "")
+    models = v.get("refreshed_models") or cat.get("models", [])
+    if not models:
+        return
+    model = v.get("model") or models[0]
+    keys = store.key_values(default)
+    preferred = store.data.get("preferred_keys", {}).get(default, "")
+    tianshu.rebind_provider(default, base, model, keys=keys, preferred_key=preferred)
+
+
+def _pool_store(tianshu: TianshuApp) -> PoolStore:
+    if tianshu.pool_store is None:
+        tianshu.pool_store = PoolStore()
+    return tianshu.pool_store
+
+
+@app.get("/api/pool")
+async def pool_list():
+    tianshu: TianshuApp = app.state.tianshu
+    store = _pool_store(tianshu)
+    return {
+        "vendors": pool_vendors(store),
+        "default": store.data.get("default_vendor", ""),
+    }
+
+
+@app.post("/api/pool/test")
+async def pool_test(req: PoolTestRequest):
+    res = await test_connection(req.base_url, req.model, req.api_key, req.api_style)
+    return {"vendor": req.vendor, **res}
+
+
+@app.post("/api/pool/connect")
+async def pool_connect(req: PoolConnectRequest):
+    tianshu: TianshuApp = app.state.tianshu
+    store = _pool_store(tianshu)
+    cat = default_catalog().get(req.vendor, {})
+    base = req.base_url or cat.get("base_url", "")
+    model = req.model or (cat.get("models") or [""])[0]
+    if not base or not model:
+        return {"ok": False, "error": "base_url 与 model 不能为空"}
+    api_style = req.api_style or cat.get("api_style", "openai")
+    added = []
+    tested = []
+    for item in req.keys:
+        value = item.value.strip()
+        if not value:
+            continue
+        if req.run_validation:
+            res = await test_connection(base, model, value, api_style)
+            tested.append({"key": value[:6] + "...", "ok": res.get("ok"), "error": res.get("error", "")})
+            if not res.get("ok"):
+                continue
+        kid = store.add_key(req.vendor, value, item.label)
+        added.append(kid)
+    if added:
+        store.upsert_vendor(req.vendor, base, vendor_name=cat.get("name", req.vendor))
+        store.set_model(req.vendor, model)
+        if req.set_default:
+            store.set_default(req.vendor)
+        _rebind_from_store(tianshu)
+    return {"ok": bool(added), "added": added, "tested": tested}
+
+
+@app.post("/api/pool/keys")
+async def pool_key_op(req: PoolKeyOpRequest):
+    tianshu: TianshuApp = app.state.tianshu
+    store = _pool_store(tianshu)
+    ok = False
+    if req.action == "add":
+        if not req.value.strip():
+            return {"ok": False, "error": "Key 不能为空"}
+        store.add_key(req.vendor, req.value, req.label)
+        ok = True
+        _rebind_from_store(tianshu)
+    elif req.action == "remove":
+        ok = store.remove_key(req.vendor, req.kid)
+        _rebind_from_store(tianshu)
+    elif req.action == "toggle":
+        ok = store.set_key_enabled(req.vendor, req.kid, req.enabled)
+        _rebind_from_store(tianshu)
+    return {"ok": ok}
+
+
+@app.post("/api/pool/default")
+async def pool_default(req: PoolDefaultRequest):
+    tianshu: TianshuApp = app.state.tianshu
+    store = _pool_store(tianshu)
+    store.set_default(req.vendor)
+    if req.preferred_key:
+        store.set_preferred_key(req.vendor, req.preferred_key)
+    _rebind_from_store(tianshu)
+    return {"ok": True, "vendor": req.vendor}
+
+
+class PoolModelRequest(BaseModel):
+    vendor: str
+    model: str
+
+
+@app.post("/api/pool/model")
+async def pool_model(req: PoolModelRequest):
+    tianshu: TianshuApp = app.state.tianshu
+    store = _pool_store(tianshu)
+    store.set_model(req.vendor, req.model)
+    _rebind_from_store(tianshu)
+    return {"ok": True, "vendor": req.vendor, "model": req.model}
+
+
+@app.post("/api/pool/refresh")
+async def pool_refresh(req: PoolRefreshRequest):
+    tianshu: TianshuApp = app.state.tianshu
+    store = _pool_store(tianshu)
+    cat = default_catalog()
+    targets = [req.vendor] if req.vendor else list(store.vendors())
+    results = []
+    for name in targets:
+        v = store.vendor(name)
+        if not v:
+            continue
+        base = v.get("base_url") or cat.get(name, {}).get("base_url", "")
+        if not base:
+            continue
+        api_key = ""
+        for k in store.key_values(name):
+            api_key = k.get("value", "")
+            break
+        api_style = cat.get(name, {}).get("api_style", "openai")
+        try:
+            models = await refresh_models(base, api_key, api_style)
+            store.set_refreshed_models(name, models)
+            results.append({"vendor": name, "models": len(models), "models_list": models})
+        except Exception as e:  # noqa: BLE001
+            results.append({"vendor": name, "models": 0, "error": str(e)})
+    _rebind_from_store(tianshu)
+    return {"ok": True, "results": results}
 
 
 @app.get("/api/state")

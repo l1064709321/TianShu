@@ -94,6 +94,50 @@
     header { gap: 8px; }
     .msg { max-width: 92%; }
   }
+  #pool-btn { background: #2a3040; padding: 6px 10px; font-size: 12px; }
+  #pool-btn:hover { background: #3a4254; }
+  #pool-drawer { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; z-index: 50; }
+  #pool-drawer.open { display: flex; justify-content: flex-end; }
+  #pool-panel { width: min(680px, 96vw); height: 100%; background: #0f1115; border-left: 1px solid #2b313d; display: flex; flex-direction: column; }
+  body[data-theme="light"] #pool-panel { background: #fff; border-left-color: var(--border); }
+  #pool-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid #262b36; }
+  #pool-head h2 { margin: 0; font-size: 15px; color: #7cc4ff; flex: 1; }
+  #pool-search { flex: 1; max-width: 260px; background: #0f1115; border: 1px solid #2b313d; border-radius: 8px; padding: 7px 12px; color: #e6e6e6; font-size: 13px; outline: none; }
+  #pool-body { flex: 1; overflow-y: auto; padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; }
+  .pool-group { font-size: 12px; color: #8b93a3; margin: 6px 0 2px; display: flex; align-items: center; gap: 8px; }
+  .pool-group::after { content: ''; flex: 1; height: 1px; background: #262b36; }
+  .pool-card { background: #161a22; border: 1px solid #2b313d; border-radius: 10px; padding: 12px 14px; }
+  .pool-card.is-default { border-color: #3b82f6; }
+  body[data-theme="light"] .pool-card { background: #fafbfc; border-color: var(--border); }
+  .pool-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .pool-card-head b { font-size: 14px; }
+  .tag { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: #1d3a5f; color: #7cc4ff; }
+  .tag.free { background: #14351f; color: #4ade80; }
+  .tag.off { background: #3a1d1d; color: #f87171; }
+  .tag.region { background: #232936; color: #9ca3af; }
+  .pool-card .row { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .pool-card input[type=text], .pool-card input[type=password], .pool-card select {
+    background: #0f1115; border: 1px solid #2b313d; border-radius: 6px; padding: 6px 10px; color: #e6e6e6; font-size: 12px; outline: none;
+  }
+  body[data-theme="light"] .pool-card input, body[data-theme="light"] .pool-card select { background: #fff; border-color: var(--border); color: var(--text); }
+  .pool-card .base-url { flex: 1; min-width: 200px; }
+  .model-select { max-width: 260px; flex: 1; min-width: 140px; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 6px; }
+  .btn-gray { background: #2a3040; } .btn-gray:hover { background: #3a4254; }
+  .btn-green { background: #15803d; } .btn-green:hover { background: #16a34a; }
+  .btn-red { background: #b91c1c; } .btn-red:hover { background: #dc2626; }
+  .pool-key { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 4px 0; flex-wrap: wrap; }
+  .pool-key .masked { font-family: monospace; color: #b6bdca; }
+  .key-status { font-size: 11px; padding: 1px 6px; border-radius: 8px; }
+  .key-status.ok { background: #14351f; color: #4ade80; }
+  .key-status.expired { background: #3a1d1d; color: #f87171; }
+  .key-status.unknown { background: #232936; color: #9ca3af; }
+  .pool-msg { font-size: 12px; margin-top: 6px; }
+  .pool-msg.ok { color: #4ade80; }
+  .pool-msg.err { color: #f87171; }
+  .pool-msg.busy { color: #7cc4ff; }
+  #key-select { max-width: 180px; font-size: 12px; }
+  .unsupported-note { font-size: 12px; color: #f87171; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -104,6 +148,7 @@
   <span class="spacer"></span>
   <label class="pill">模型:</label>
   <select id="provider-select" title="切换模型(运行时生效)"></select>
+  <button id="pool-btn">模型池</button>
   <button id="theme-btn" style="background:#2a3040;padding:6px 10px;font-size:12px;">☀ 浅色</button>
 </header>
 <div id="layout">
@@ -115,6 +160,7 @@
     <div id="messages"></div>
     <div id="pending"></div>
     <div id="inputbar">
+      <select id="key-select" title="当前厂商 Key(自动优先选择,过期自动换下一个)" style="display:none"></select>
       <input id="input" placeholder="输入任务,Enter 发送,主 Agent 将调度子 Agent 执行..." autofocus>
       <button id="cancel-btn" style="display:none;background:#b91c1c;">取消</button>
       <button id="send">发送</button>
@@ -143,6 +189,16 @@
       <div class="metric-row"><span>上次任务</span><span class="v" id="mem-task" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">-</span></div>
       <div id="mem-blocks"></div>
     </div>
+  </div>
+</div>
+<div id="pool-drawer">
+  <div id="pool-panel">
+    <div id="pool-head">
+      <h2>模型池</h2>
+      <input id="pool-search" placeholder="搜索厂商 / 模型..." oninput="renderPool()">
+      <button id="pool-close" class="btn-sm btn-gray">关闭</button>
+    </div>
+    <div id="pool-body"></div>
   </div>
 </div>
 <script>
@@ -262,37 +318,211 @@ pendingBox.addEventListener('click', e => {
   if (!pendingBox.children.length) pendingBox.classList.remove('visible');
 });
 
+async function postJSON(url, body) {
+  const resp = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {}) });
+  return resp.json();
+}
+
+let poolData = { vendors: [], default: '' };
+
+async function loadPool(keepSelection) {
+  try {
+    const resp = await fetch('/api/pool');
+    poolData = await resp.json();
+  } catch (e) { poolData = { vendors: [], default: '' }; }
+  const prev = keepSelection ? providerSelect.value : '';
+  providerSelect.innerHTML = '';
+  const connected = poolData.vendors.filter(v => v.connected);
+  for (const v of connected) {
+    const opt = document.createElement('option');
+    opt.value = v.key;
+    opt.dataset.model = v.model || '';
+    opt.textContent = `${v.name} · ${v.model || ''}`;
+    providerSelect.appendChild(opt);
+  }
+  if (!connected.length) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = '暂无接入模型,点击右侧"模型池"接入';
+    providerSelect.appendChild(opt);
+  }
+  providerSelect.value = prev && connected.some(v => v.key === prev) ? prev : poolData.default || (connected[0] || {}).key || '';
+  currentModel = providerSelect.selectedOptions[0]?.dataset?.model || '';
+  refreshKeySelect();
+}
+
+function refreshKeySelect() {
+  const sel = $('#key-select');
+  const vendor = poolData.vendors.find(v => v.key === providerSelect.value);
+  if (!vendor || !vendor.keys || !vendor.keys.length) { sel.style.display = 'none'; sel.innerHTML = ''; return; }
+  sel.style.display = 'inline-block';
+  sel.innerHTML = '';
+  for (const k of vendor.keys) {
+    const opt = document.createElement('option');
+    opt.value = k.id;
+    opt.textContent = `${k.label || k.masked} [${k.status}]${k.id === vendor.preferred_key ? ' ✓当前' : ''}`;
+    sel.appendChild(opt);
+  }
+  sel.value = vendor.preferred_key || vendor.keys[0].id || '';
+  if (sel.value) sel.dataset.vendor = vendor.key;
+}
+
 providerSelect.addEventListener('change', async () => {
   const name = providerSelect.value;
   if (!name) return;
-  const resp = await fetch('/api/provider/switch', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({ provider: name })
-  });
-  const data = await resp.json();
+  const data = await postJSON('/api/pool/default', { vendor: name });
   if (data.ok) {
-    const opt = providerSelect.options[providerSelect.selectedIndex];
+    const opt = providerSelect.selectedOptions[0];
     currentModel = opt.dataset.model || name;
     addMsg('agent', `已切换模型: ${name} (${currentModel})`, '系统');
     $('#status').textContent = '已连接';
+    await loadPool(true);
   } else {
-    addMsg('agent', `切换失败: ${data.error}`, '系统');
+    addMsg('agent', `切换失败: ${data.error || '未知错误'}`, '系统');
   }
 });
 
-async function loadProviders() {
-  const resp = await fetch('/api/providers');
-  const data = await resp.json();
-  const active = data.default;
-  for (const p of data.providers) {
-    const opt = document.createElement('option');
-    opt.value = p.name;
-    opt.dataset.model = p.model;
-    opt.textContent = `${p.name} · ${p.model}${p.api_key ? ' · key:' + p.api_key : ''}`;
-    providerSelect.appendChild(opt);
+$('#key-select').addEventListener('change', async () => {
+  const sel = $('#key-select');
+  const kid = sel.value;
+  const vendor = sel.dataset.vendor;
+  if (!kid || !vendor) return;
+  const data = await postJSON('/api/pool/default', { vendor, preferred_key: kid });
+  if (data.ok) { addMsg('agent', `当前 Key 已设为: ${sel.selectedOptions[0].textContent}`, '系统'); }
+  else { addMsg('agent', `设置 Key 失败: ${data.error || '未知错误'}`, '系统'); }
+});
+
+$('#pool-btn').addEventListener('click', () => { $('#pool-drawer').classList.add('open'); renderPool(); });
+$('#pool-close').addEventListener('click', () => $('#pool-drawer').classList.remove('open'));
+$('#pool-drawer').addEventListener('click', e => { if (e.target.id === 'pool-drawer') $('#pool-drawer').classList.remove('open'); });
+
+function poolCard(v) {
+  const models = [...new Set([...(v.models || []), ...(v.model ? [v.model] : [])])];
+  const modelOptions = models.map(m => `<option value="${m}" ${m === v.model ? 'selected' : ''}>${m}</option>`).join('');
+  const keyRows = (v.keys || []).map(k => `
+    <div class="pool-key">
+      <span class="masked">${k.label ? k.label + ' · ' : ''}${k.masked}</span>
+      <span class="key-status ${k.status}">${k.status}</span>
+      ${k.id === v.preferred_key ? '<span class="tag">当前</span>' : ''}
+      <button class="btn-sm btn-gray" onclick="toggleKey('${v.key}','${k.id}',${!k.enabled})">${k.enabled ? '停用' : '启用'}</button>
+      <button class="btn-sm btn-red" onclick="removeKey('${v.key}','${k.id}')">删除</button>
+    </div>`).join('');
+  const tags = [
+    `<span class="tag region">${v.region || ''}</span>`,
+    v.free ? '<span class="tag free">免费</span>' : '',
+    !v.supported ? '<span class="tag off">仅外部配置</span>' : '',
+    v.default ? '<span class="tag">✓ 当前</span>' : '',
+  ].join('');
+  return `
+  <div class="pool-card ${v.default ? 'is-default' : ''}" data-vendor="${v.key}">
+    <div class="pool-card-head">
+      <b>${v.name}</b> ${tags}
+      ${v.connected ? `<button class="btn-sm btn-green" onclick="setDefault('${v.key}')">设为当前</button>` : ''}
+      ${v.connected ? `<button class="btn-sm btn-gray" onclick="refreshVendor('${v.key}')">刷新模型列表</button>` : ''}
+      <span class="spacer"></span>
+    </div>
+    <div class="pool-card-head" style="margin-top:8px;font-size:12px;color:#8b93a3">
+      <input class="base-url" id="base-${v.key}" type="text" value="${v.base_url}" placeholder="Base URL">
+      <select class="model-select" id="model-${v.key}" onchange="setVendorModel('${v.key}')">${modelOptions}</select>
+    </div>
+    ${keyRows || '<div class="pool-msg" style="color:#8b93a3">未配置 Key</div>'}
+    <div class="row">
+      <input type="text" id="keylabel-${v.key}" placeholder="备注(可选)" style="width:110px">
+      <input type="password" id="keyval-${v.key}" placeholder="${v.key_required ? '粘贴 API Key' : '粘贴 Key(免费厂商可留空)'}" style="flex:1;min-width:160px">
+      <button class="btn-sm btn-gray" onclick="testVendor('${v.key}')">测试连接</button>
+      <button class="btn-sm btn-green" onclick="connectVendor('${v.key}')">${v.connected ? '新增并接入' : '接入'}</button>
+    </div>
+    <div class="pool-msg" id="msg-${v.key}"></div>
+    ${!v.supported ? '<div class="unsupported-note">⚠ 该厂商非 OpenAI 兼容协议,天枢无法直连;可在此保存配置供外部项目使用。</div>' : ''}
+    ${v.notes ? `<div style="font-size:11px;color:#64748b;margin-top:4px">${v.notes}</div>` : ''}
+  </div>`;
+}
+
+function renderPool() {
+  const q = ($('#pool-search').value || '').toLowerCase();
+  const vendors = poolData.vendors || [];
+  const match = v => !q || v.name.toLowerCase().includes(q) || (v.models || []).some(m => m.toLowerCase().includes(q));
+  const groups = [
+    ['国外', vendors.filter(v => v.region === '国外' && match(v))],
+    ['国内', vendors.filter(v => v.region === '国内' && match(v))],
+    ['本地', vendors.filter(v => v.region === '本地' && match(v))],
+  ];
+  let html = '';
+  for (const [gname, gv] of groups) {
+    if (!gv.length) continue;
+    html += `<div class="pool-group">${gname}</div>` + gv.map(poolCard).join('');
   }
-  providerSelect.value = active;
-  currentModel = (providerSelect.selectedOptions[0] || {}).dataset?.model || active;
+  if (!html) html = '<div class="pool-msg" style="color:#8b93a3">无匹配结果</div>';
+  $('#pool-body').innerHTML = html;
+}
+
+function poolMsg(key, text, cls) {
+  const el = $(`#msg-${key}`);
+  if (el) { el.textContent = text; el.className = 'pool-msg ' + cls; }
+}
+
+async function testVendor(key) {
+  const v = poolData.vendors.find(x => x.key === key);
+  const base = $(`#base-${key}`).value.trim();
+  const model = $(`#model-${key}`).value;
+  const api = $(`#keyval-${key}`).value.trim();
+  poolMsg(key, '测试中...', 'busy');
+  const data = await postJSON('/api/pool/test', { vendor: key, base_url: base, model, api_key: api, api_style: v.api_style });
+  if (data.ok) poolMsg(key, `✅ 连接成功,${data.latency_ms}ms,模型名: ${data.model}`, 'ok');
+  else poolMsg(key, `❌ ${data.error || '测试失败'}`, 'err');
+}
+
+async function connectVendor(key) {
+  const v = poolData.vendors.find(x => x.key === key);
+  const base = $(`#base-${key}`).value.trim();
+  const model = $(`#model-${key}`).value;
+  const api = $(`#keyval-${key}`).value.trim();
+  const label = $(`#keylabel-${key}`).value.trim();
+  if (!api && v.key_required) { poolMsg(key, '需要填写 API Key', 'err'); return; }
+  poolMsg(key, '接入中(测试 + 保存)...', 'busy');
+  const data = await postJSON('/api/pool/connect', { vendor: key, base_url: base, model, keys: [{ value: api, label }], run_validation: !!api });
+  if (data.ok && data.added.length) {
+    poolMsg(key, `✅ 接入成功 ${data.tested.map(t => t.ok ? 'Key验证通过' : 'Key验证失败: ' + t.error).join('; ') || ''}`, 'ok');
+    await loadPool(true);
+    renderPool();
+  } else if (data.ok) {
+    poolMsg(key, '❌ Key 验证失败,未保存:' + (data.tested || []).map(t => ' ' + t.error).join(''), 'err');
+  } else {
+    poolMsg(key, '❌ ' + (data.error || '接入失败'), 'err');
+  }
+}
+
+async function setDefault(key) {
+  const data = await postJSON('/api/pool/default', { vendor: key });
+  if (data.ok) { addMsg('agent', `已切换 ${key} 为当前模型`, '系统'); await loadPool(true); renderPool(); }
+}
+
+async function refreshVendor(key) {
+  poolMsg(key, '刷新模型列表中...', 'busy');
+  const data = await postJSON('/api/pool/refresh', { vendor: key });
+  const r = (data.results || [])[0];
+  if (r && !r.error) {
+    poolMsg(key, `✅ 刷新成功,共 ${r.models} 个模型`, 'ok');
+    await loadPool(true); renderPool();
+  } else {
+    poolMsg(key, '❌ 刷新失败: ' + (r ? r.error : '未知'), 'err');
+  }
+}
+
+async function setVendorModel(key) {
+  const model = $(`#model-${key}`).value;
+  await postJSON('/api/pool/model', { vendor: key, model });
+  await loadPool(true);
+}
+
+async function toggleKey(key, kid, enabled) {
+  const data = await postJSON('/api/pool/keys', { vendor: key, action: 'toggle', kid, enabled });
+  if (data.ok) { await loadPool(true); renderPool(); }
+}
+
+async function removeKey(key, kid) {
+  const data = await postJSON('/api/pool/keys', { vendor: key, action: 'remove', kid });
+  if (data.ok) { await loadPool(true); renderPool(); }
 }
 
 let taskRunning = false;
@@ -548,7 +778,7 @@ $('#theme-btn').onclick = () => {
 };
 try { const t = localStorage.getItem('ts-theme'); if (t === 'light') { document.body.dataset.theme = 'light'; $('#theme-btn').textContent = '🌙 深色'; } } catch(e) {}
 $('#input').addEventListener('keydown', e => { if (e.key === 'Enter') ask(); });
-loadProviders();
+loadPool();
 fetch('/api/state').then(r => r.json()).then(s => $('#agents').textContent = 'Agent: ' + s.agents.join(', '));
 connectWs();
 </script>
