@@ -4,16 +4,15 @@ import asyncio
 import ipaddress
 import os
 import shlex
-import subprocess
 import urllib.parse
 from pathlib import Path
-from typing import Any
 
-from bs4 import BeautifulSoup
 import httpx
+from bs4 import BeautifulSoup
 
-from tianshu.config import WORKSPACE_DIR, SENSITIVE_DIR
-from tianshu.core.tools.registry import ToolRegistry, RAW
+from tianshu.config import SENSITIVE_DIR, WORKSPACE_DIR
+from tianshu.core.rollback import auto_snapshot, list_snapshots, restore_snapshot, snapshot_all
+from tianshu.core.tools.registry import RAW, ToolRegistry
 
 SHELL_ALLOWED = {
     "ls", "cat", "head", "tail", "wc", "grep", "rg", "find", "pwd",
@@ -141,9 +140,10 @@ def register_builtin_tools(registry: ToolRegistry) -> None:
         p = _ensure_inside_workspace(_resolve(path))
         return p.read_text(encoding="utf-8")
 
-    @registry.decorator("write_file", description="写入文件(覆盖),目录不存在时自动创建", requires_review=True)
+    @registry.decorator("write_file", description="写入文件(覆盖),目录不存在时自动创建,写入前自动快照旧版本(出错可回滚)", requires_review=True)
     async def write_file(path: str, content: str) -> str:
         p = _ensure_inside_workspace(_resolve(path))
+        auto_snapshot(p)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
         return f"已写入 {path} ({len(content)} 字符)"
@@ -193,6 +193,26 @@ def register_builtin_tools(registry: ToolRegistry) -> None:
                 f.unlink(missing_ok=True)
                 n += 1
         return f"已清理 {n} 个敏感文件"
+
+    @registry.decorator(
+        "snapshot",
+        description="为工作区建立全量快照(可带标签),出错时可用 list_snapshots + rollback 恢复",
+        requires_review=True,
+    )
+    async def snapshot(label: str = "manual") -> str:
+        return snapshot_all(label)
+
+    @registry.decorator("list_snapshots", description="列出可选回滚快照", format_result=RAW)
+    async def list_snapshot_tool(limit: int = 10) -> str:
+        return list_snapshots(limit)
+
+    @registry.decorator(
+        "rollback",
+        description="从指定快照恢复文件或目录(危险,覆盖当前内容,需审批);恢复前会自动备份当前版本",
+        requires_review=True,
+    )
+    async def rollback(snapshot_name: str, target: str) -> str:
+        return restore_snapshot(snapshot_name, target)
 
     @registry.decorator("search_files", description="按 glob 模式搜索工作区文件", format_result=RAW)
     async def search_files(pattern: str) -> str:
