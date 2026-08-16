@@ -119,6 +119,10 @@ TIANSHU_PROVIDERS=[{"name":"ollama","base_url":"http://localhost:11434/v1","api_
 EOF
 ```
 
+### 身份卡片
+
+所有 Agent 的系统提示统一注入「身份卡片」(`tianshu/core/identity.py` 内置,可用 `TIANSHU_IDENTITY_FILE` 指向自定义文件):无论接入哪个厂商模型,对外身份恒为「天枢」,不冒认任何模型/产品品牌。
+
 ### 模型池(Web 端可视化接入)
 
 `tianshu serve` 启动后,点击页头「模型池」按钮:
