@@ -11,6 +11,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from tianshu.config import SENSITIVE_DIR, WORKSPACE_DIR
+from tianshu.core.access import is_granted
 from tianshu.core.backup import create_backup as backup_create
 from tianshu.core.backup import list_backups as backup_list
 from tianshu.core.backup import restore_backup as backup_restore
@@ -39,7 +40,7 @@ def _inside_allowed(p: Path) -> bool:
     for root in allowed_roots:
         if p == root or root in p.parents:
             return True
-    return False
+    return is_granted(p)
 
 
 def _check_path_args(cmd: str, parts: list[str], cwd: Path) -> None:

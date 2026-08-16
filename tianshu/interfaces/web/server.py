@@ -80,6 +80,10 @@ class AskRequest(BaseModel):
     session_id: str = ""
 
 
+class AccessRootRequest(BaseModel):
+    path: str
+
+
 class ReviewDecision(BaseModel):
     review_id: str
     approve: bool
@@ -286,6 +290,34 @@ async def pool_refresh(req: PoolRefreshRequest):
 async def get_state():
     tianshu: TianshuApp = app.state.tianshu
     return tianshu.state()
+
+
+@app.get("/api/access")
+async def access_list():
+    from tianshu.config import SENSITIVE_DIR, WORKSPACE_DIR
+    from tianshu.core.access import list_roots
+
+    return {"defaults": [str(WORKSPACE_DIR), str(SENSITIVE_DIR)], "roots": list_roots()}
+
+
+@app.post("/api/access")
+async def access_add(req: AccessRootRequest):
+    from tianshu.core.access import add_root
+
+    try:
+        return {"ok": True, "msg": add_root(req.path)}
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+
+
+@app.delete("/api/access")
+async def access_remove(req: AccessRootRequest):
+    from tianshu.core.access import remove_root
+
+    try:
+        return {"ok": True, "msg": remove_root(req.path)}
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
 
 
 @app.get("/api/memory")
