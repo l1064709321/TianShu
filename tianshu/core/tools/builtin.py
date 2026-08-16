@@ -11,6 +11,9 @@ import httpx
 from bs4 import BeautifulSoup
 
 from tianshu.config import SENSITIVE_DIR, WORKSPACE_DIR
+from tianshu.core.backup import create_backup as backup_create
+from tianshu.core.backup import list_backups as backup_list
+from tianshu.core.backup import restore_backup as backup_restore
 from tianshu.core.rollback import auto_snapshot, list_snapshots, restore_snapshot, snapshot_all
 from tianshu.core.tools.registry import RAW, ToolRegistry
 
@@ -201,6 +204,26 @@ def register_builtin_tools(registry: ToolRegistry) -> None:
     )
     async def snapshot(label: str = "manual") -> str:
         return snapshot_all(label)
+
+    @registry.decorator(
+        "create_backup",
+        description="生成关键配置整包备份(config/models.json、.env、tianshu.db、身份卡片)为压缩文件 backup-*.tar.gz",
+        requires_review=True,
+    )
+    async def create_backup(label: str = "manual") -> str:
+        return backup_create(label)
+
+    @registry.decorator("list_backups", description="列出可恢复的备份压缩文件及其内容", format_result=RAW)
+    async def list_backup_tool() -> str:
+        return backup_list()
+
+    @registry.decorator(
+        "restore_backup",
+        description="从备份压缩文件恢复单个关键配置(仅 models.json/.env/tianshu.db/identity-card,危险,需审批);恢复前自动建 pre-restore 备份",
+        requires_review=True,
+    )
+    async def restore_backup(backup: str, target: str) -> str:
+        return backup_restore(backup, target)
 
     @registry.decorator("list_snapshots", description="列出可选回滚快照", format_result=RAW)
     async def list_snapshot_tool(limit: int = 10) -> str:
