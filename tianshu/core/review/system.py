@@ -3,9 +3,9 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable
 
 from tianshu.core.tools.registry import Tool
 
@@ -68,6 +68,9 @@ class ReviewSystem:
         if self.mode == "auto_reject":
             self._decide(req, ReviewStatus.REJECTED, "auto_reject")
             return req
+        if self.mode == "manual" and not self._subscribers:
+            self._decide(req, ReviewStatus.REJECTED, "no_subscribers")
+            return req
 
         self._pending[req.id] = req
         event = asyncio.Event()
@@ -76,7 +79,7 @@ class ReviewSystem:
             cb(req)
         try:
             await asyncio.wait_for(event.wait(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._decide(req, ReviewStatus.TIMEOUT, "timeout")
         return req
 
@@ -85,6 +88,13 @@ class ReviewSystem:
         if req is None or req.status != ReviewStatus.PENDING:
             return False
         self._decide(req, ReviewStatus.APPROVED if approve else ReviewStatus.REJECTED, by)
+        from tianshu.core.audit import audit
+
+        audit(
+            "review.decide",
+            f"review_id={req.id} agent={req.agent} tool={req.tool} verdict={'approve' if approve else 'reject'}",
+            actor=by,
+        )
         return True
 
     def _decide(self, req: ReviewRequest, status: ReviewStatus, by: str) -> None:
@@ -104,4 +114,6 @@ async def gate_tool(review: ReviewSystem, agent_name: str, tool: Tool, args: dic
         reason=f"工具 {tool.name} 属于高危操作",
     )
     if req.status != ReviewStatus.APPROVED:
+        if req.decided_by == "no_subscribers":
+            raise PermissionError("该操作需人工审批,但当前没有连接审批端(管理面板),已拒绝;请打开面板后重试")
         raise PermissionError(f"未通过审核: {req.status.value}({req.decided_by})")

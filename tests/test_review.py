@@ -8,8 +8,17 @@ from tianshu.core.review.system import ReviewStatus, ReviewSystem
 
 
 @pytest.mark.asyncio
+async def test_manual_review_no_subscriber_fast_rejects():
+    review = ReviewSystem(mode="manual")
+    req = await review.request("agent1", "write_file", {})
+    assert req.status == ReviewStatus.REJECTED
+    assert req.decided_by == "no_subscribers"
+
+
+@pytest.mark.asyncio
 async def test_manual_review_approve():
     review = ReviewSystem(mode="manual")
+    review.subscribe(lambda req: None)
     req_task = asyncio.create_task(
         review.request("agent1", "write_file", {"path": "a.txt"}, reason="写文件")
     )
@@ -26,6 +35,7 @@ async def test_manual_review_approve():
 @pytest.mark.asyncio
 async def test_manual_review_reject():
     review = ReviewSystem(mode="manual")
+    review.subscribe(lambda req: None)
     req_task = asyncio.create_task(review.request("agent1", "run_shell", {}))
     await asyncio.sleep(0.05)
     rid = review.pending()[0].id
@@ -44,6 +54,7 @@ async def test_auto_approve_mode():
 @pytest.mark.asyncio
 async def test_timeout():
     review = ReviewSystem(mode="manual")
+    review.subscribe(lambda req: None)
     req = await review.request("agent1", "write_file", {}, timeout=0.1)
     assert req.status == ReviewStatus.TIMEOUT
 

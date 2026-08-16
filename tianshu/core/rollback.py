@@ -104,6 +104,12 @@ def restore_snapshot(snapshot: str, target: str) -> str:
     t.parent.mkdir(parents=True, exist_ok=True)
     if src.is_dir():
         shutil.copytree(src, t, dirs_exist_ok=True)
+        from tianshu.core.audit import audit
+
+        audit("rollback.restore", f"snapshot={snap.name} target={rel}")
         return f"已从 {snap.name} 恢复目录 {rel}(恢复前版本已自动备份)"
     shutil.copy2(src, t)
+    from tianshu.core.audit import audit
+
+    audit("rollback.restore", f"snapshot={snap.name} target={rel}")
     return f"已从 {snap.name} 恢复文件 {rel}(恢复前版本已自动备份)"

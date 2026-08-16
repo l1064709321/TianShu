@@ -48,6 +48,9 @@ def create_backup(label: str = "manual") -> str:
     keep = sorted(BACKUP_ROOT.glob("backup-*.tar.gz"), key=lambda p: p.name)
     for old in keep[:-MAX_BACKUPS]:
         old.unlink(missing_ok=True)
+    from tianshu.core.audit import audit
+
+    audit("backup.create", f"file={path.name}", actor="web")
     return name
 
 
@@ -92,4 +95,7 @@ def restore_backup(backup: str, target: str) -> str:
             dest.write_bytes(recovered.read())
         else:
             raise FileNotFoundError(f"当前不存在可恢复的目标文件: {target}")
+    from tianshu.core.audit import audit
+
+    audit("backup.restore", f"file={b.name} target={target}", actor="web")
     return f"已从 {b.name} 恢复 {target}(恢复前已自动建 pre-restore 备份,重启服务后生效)"

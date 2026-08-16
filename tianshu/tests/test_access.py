@@ -51,11 +51,11 @@ def test_dup_add_and_remove(sandbox, tmp_path):
     acc.add_root(str(d))
     with pytest.raises(ValueError):
         acc.add_root(str(d))
-    acc.remove_root(str(d))
+    acc.remove_root(str(d), scope="global")
     assert acc.list_roots() == []
     assert not _inside_allowed(d / "x")
     with pytest.raises(ValueError):
-        acc.remove_root(str(d))
+        acc.remove_root(str(d), scope="global")
 
 
 def test_persistence_roundtrip(sandbox, tmp_path):
@@ -63,7 +63,7 @@ def test_persistence_roundtrip(sandbox, tmp_path):
     d.mkdir()
     acc.add_root(str(d))
     assert acc.ACCESS_FILE.exists()
-    assert str(d) in acc.list_roots()
+    assert any(item["path"] == str(d) for item in acc.list_roots())
 
 
 def test_shell_path_args_respect_grant(sandbox, tmp_path):
@@ -79,3 +79,36 @@ def test_shell_path_args_respect_grant(sandbox, tmp_path):
 
     out = asyncio.run(run_shell_guarded("cat x.txt", cwd=outside))
     assert "hello" in out
+
+
+def test_session_scope_visibility(sandbox, tmp_path):
+    d1 = tmp_path / "d1"
+    d2 = tmp_path / "d2"
+    d1.mkdir()
+    d2.mkdir()
+    acc.add_root(str(d1), scope="global")
+    acc.add_root(str(d2), scope="session:abc")
+    assert _inside_allowed(d1)
+    assert not _inside_allowed(d2)
+    acc.set_current_session("abc")
+    assert _inside_allowed(d1)
+    assert _inside_allowed(d2)
+    acc.set_current_session("other")
+    assert _inside_allowed(d1)
+    assert not _inside_allowed(d2)
+
+
+def test_session_scope_list_and_remove(sandbox, tmp_path):
+    d = tmp_path / "sd"
+    d.mkdir()
+    acc.add_root(str(d), scope="session:s1")
+    assert acc.list_roots() == [{"path": str(d), "scope": "session:s1"}]
+    with pytest.raises(ValueError):
+        acc.remove_root(str(d), scope="global")
+    acc.remove_root(str(d), scope="session:s1")
+    assert acc.list_roots() == []
+
+
+def test_invalid_scope_rejected(sandbox):
+    with pytest.raises(ValueError):
+        acc.add_root("/tmp", scope="foo")

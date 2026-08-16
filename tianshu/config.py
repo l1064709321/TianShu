@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     providers: list[LLMProviderConfig] = Field(default_factory=lambda: [LLMProviderConfig()])
     default_provider: str = "mock"
     mode: Literal["full", "headless"] = "full"
+    web_token: str = ""
 
 
 settings = Settings()

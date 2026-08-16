@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from starlette.responses import FileResponse
+from starlette.responses import FileResponse, JSONResponse
 
 from tianshu.app import TianshuApp, create_app
 from tianshu.config import PROJECT_ROOT, settings
@@ -40,6 +41,14 @@ def build_app(provider: str | None = None) -> TianshuApp:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    token = settings.web_token or secrets.token_urlsafe(16)
+    app.state.web_token = token
+    from tianshu.core.log import get_logger
+
+    if not settings.web_token:
+        get_logger("web").warning("未配置 TIANSHU_WEB_TOKEN,已生成随机访问令牌: %s", token)
+    else:
+        get_logger("web").info("面板访问令牌已启用")
     tianshu = build_app()
     if tianshu.sessions:
         await tianshu.sessions.connect()
@@ -51,6 +60,11 @@ async def lifespan(app: FastAPI):
         q.put_nowait(None)
     if tianshu.sessions:
         await tianshu.sessions.close()
+
+
+def _token_valid(app: FastAPI, provided: str) -> bool:
+    expected = getattr(app.state, "web_token", None)
+    return bool(expected) and secrets.compare_digest(expected, provided or "")
 
 
 def _bind_review(tianshu: TianshuApp, queues: set[asyncio.Queue]) -> None:
@@ -69,6 +83,32 @@ app = FastAPI(title="天枢", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+@app.middleware("http")
+async def api_auth(request, call_next):
+    path = request.url.path
+    if not path.startswith("/api/") or path == "/api/login":
+        return await call_next(request)
+    provided = request.headers.get("x-ts-token", "")
+    if not _token_valid(app, provided):
+        return JSONResponse({"ok": False, "error": "未授权,请先登录"}, status_code=401)
+    return await call_next(request)
+
+
+class LoginRequest(BaseModel):
+    token: str
+
+
+@app.post("/api/login")
+async def api_login(req: LoginRequest):
+    valid = _token_valid(app, req.token)
+    from tianshu.core.audit import audit
+
+    audit("auth.login", "login " + ("ok" if valid else "failed"), actor="web")
+    if valid:
+        return {"ok": True, "msg": "登录成功"}
+    return JSONResponse({"ok": False, "error": "令牌错误"}, status_code=401)
+
+
 @app.get("/")
 async def index():
     return FileResponse(STATIC_DIR / "index.html")
@@ -82,6 +122,7 @@ class AskRequest(BaseModel):
 
 class AccessRootRequest(BaseModel):
     path: str
+    scope: str = "global"
 
 
 class ReviewDecision(BaseModel):
@@ -305,7 +346,7 @@ async def access_add(req: AccessRootRequest):
     from tianshu.core.access import add_root
 
     try:
-        return {"ok": True, "msg": add_root(req.path)}
+        return {"ok": True, "msg": add_root(req.path, req.scope)}
     except ValueError as e:
         return {"ok": False, "error": str(e)}
 
@@ -315,7 +356,7 @@ async def access_remove(req: AccessRootRequest):
     from tianshu.core.access import remove_root
 
     try:
-        return {"ok": True, "msg": remove_root(req.path)}
+        return {"ok": True, "msg": remove_root(req.path, req.scope)}
     except ValueError as e:
         return {"ok": False, "error": str(e)}
 
@@ -397,11 +438,14 @@ async def session_messages(session_id: str):
 
 @app.post("/api/ask")
 async def ask(req: AskRequest):
+    from tianshu.core.access import set_current_session
+
     tianshu: TianshuApp = app.state.tianshu
     if req.session_id:
         tianshu.current_session = req.session_id
     elif not tianshu.current_session and tianshu.sessions:
         tianshu.current_session = await tianshu.new_session()
+    set_current_session(tianshu.current_session or "")
     async with tianshu.busy_lock:
         plan = await tianshu.ask(req.task, use_orchestrator=req.use_orchestrator)
     return plan.to_dict()
@@ -417,6 +461,9 @@ async def decide(req: ReviewDecision):
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     await ws.accept()
+    if not _token_valid(app, ws.query_params.get("token", "")):
+        await ws.close(code=1008, reason="unauthorized")
+        return
     my_queue: asyncio.Queue = asyncio.Queue()
     event_queue: asyncio.Queue = asyncio.Queue()
     app.state.review_queues.add(my_queue)
@@ -455,12 +502,15 @@ async def ws_endpoint(ws: WebSocket):
             data = await ws.receive_json()
             msg_type = data.get("type")
             if msg_type == "ask":
+                from tianshu.core.access import set_current_session
+
                 tianshu: TianshuApp = app.state.tianshu
                 sid = data.get("session_id", "")
                 if sid:
                     tianshu.current_session = sid
                 elif not tianshu.current_session and tianshu.sessions:
                     tianshu.current_session = await tianshu.new_session()
+                set_current_session(tianshu.current_session or "")
                 tianshu.clear_cancel()
                 await ws.send_json({"type": "task_start"})
                 if tianshu.is_busy():

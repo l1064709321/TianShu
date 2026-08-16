@@ -159,6 +159,15 @@
   .access-msg { font-size: 12px; margin-top: 2px; }
   .access-msg.ok { color: #4ade80; }
   .access-msg.err { color: #f87171; }
+  #login-overlay { position: fixed; inset: 0; background: rgba(6,8,12,.92); z-index: 100; display: flex; align-items: center; justify-content: center; }
+  #login-overlay.hidden { display: none; }
+  #login-card { background: #161a22; border: 1px solid #2b313d; border-radius: 14px; padding: 28px 32px; width: min(380px, 90vw); text-align: center; }
+  body[data-theme="light"] #login-card { background: #fff; border-color: var(--border); }
+  #login-card h2 { color: #7cc4ff; margin: 0 0 6px; font-size: 18px; }
+  #login-card p { color: #8b93a3; font-size: 12.5px; line-height: 1.7; margin: 0 0 16px; }
+  #login-card input { width: 100%; box-sizing: border-box; background: #0f1115; border: 1px solid #2b313d; border-radius: 8px; padding: 10px 12px; color: #e6e6e6; font-size: 14px; outline: none; margin-bottom: 10px; font-family: monospace; }
+  body[data-theme="light"] #login-card input { background: #fff; border-color: var(--border); color: var(--text); }
+  #login-card .err { color: #f87171; font-size: 12px; min-height: 16px; margin-bottom: 8px; }
 </style>
 </head>
 <body>
@@ -232,6 +241,15 @@
     <div id="access-body"></div>
   </div>
 </div>
+<div id="login-overlay">
+  <div id="login-card">
+    <h2>天枢 · 访问校验</h2>
+    <p>面板受访问令牌保护。令牌在服务启动日志中打印;<br>也可在 .env 配置 <code>TIANSHU_WEB_TOKEN</code> 固定。</p>
+    <input id="login-token" type="password" placeholder="输入访问令牌" autocomplete="off">
+    <div id="login-err" class="err"></div>
+    <button id="login-ok" class="btn-sm" style="background:#3b82f6;color:#fff;width:100%;padding:10px;">进入面板</button>
+  </div>
+</div>
 <script>
 const $ = s => document.querySelector(s);
 let ws = null;
@@ -244,6 +262,27 @@ let loadingSession = false;
 
 function escapeHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+const TOKEN_KEY = 'ts_web_token';
+function getToken() { return localStorage.getItem(TOKEN_KEY) || ''; }
+function setToken(t) { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); }
+
+function showLogin() {
+  $('#login-overlay').classList.remove('hidden');
+  $('#login-token').focus();
+}
+
+async function api(path, opts) {
+  opts = opts || {};
+  opts.headers = Object.assign({ 'Content-Type': 'application/json', 'X-TS-Token': getToken() }, opts.headers || {});
+  const resp = await fetch(path, opts);
+  if (resp.status === 401) {
+    setToken('');
+    showLogin();
+    throw new Error('未授权');
+  }
+  return resp;
 }
 
 function renderMarkdown(text) {
@@ -350,15 +389,33 @@ pendingBox.addEventListener('click', e => {
 });
 
 async function postJSON(url, body) {
-  const resp = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {}) });
+  const resp = await api(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {}) });
   return resp.json();
 }
+
+async function login() {
+  const token = $('#login-token').value.trim();
+  const err = $('#login-err');
+  if (!token) { err.textContent = '请输入访问令牌'; return; }
+  try {
+    const resp = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
+    const data = await resp.json();
+    if (resp.status === 401 || !data.ok) { err.textContent = '访问令牌错误'; return; }
+    setToken(token);
+    $('#login-overlay').classList.add('hidden');
+    err.textContent = '';
+    loadPool(true);
+    connectWs();
+  } catch (e) { err.textContent = '登录失败: ' + String(e); }
+}
+$('#login-ok').addEventListener('click', login);
+$('#login-token').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
 
 let poolData = { vendors: [], default: '' };
 
 async function loadPool(keepSelection) {
   try {
-    const resp = await fetch('/api/pool');
+    const resp = await api('/api/pool');
     poolData = await resp.json();
   } catch (e) { poolData = { vendors: [], default: '' }; }
   const prev = keepSelection ? providerSelect.value : '';
@@ -434,7 +491,7 @@ async function loadAccess() {
   const body = $('#access-body');
   let data;
   try {
-    const res = await fetch('/api/access');
+    const res = await api('/api/access');
     data = await res.json();
   } catch (e) {
     body.innerHTML = '<div class="access-msg err">加载失败: ' + escapeHtml(String(e)) + '</div>';
@@ -445,17 +502,22 @@ async function loadAccess() {
     rows.push('<div class="access-root"><span class="tag tag-default">默认</span><b>' + escapeHtml(d) + '</b></div>');
   }
   for (const r of (data.roots || [])) {
-    rows.push('<div class="access-root"><span class="tag">已授权</span><b>' + escapeHtml(r) + '</b>' +
+    const scopeNote = r.scope === 'global' ? '全部会话' : '本会话(' + r.scope.replace('session:', '') + ')';
+    rows.push('<div class="access-root"><span class="tag">' + escapeHtml(scopeNote) + '</span><b>' + escapeHtml(r.path) + '</b>' +
       '<button class="btn-sm btn-gray" style="margin-left:auto;" onclick="delAccess(this)">撤销</button></div>');
   }
+  let sessionOpts = '<select id="access-scope" style="max-width:150px;background:#0f1115;border:1px solid #2b313d;border-radius:8px;padding:7px 8px;color:#e6e6e6;font-size:12px;"><option value="global">作用域:全部会话</option>';
+  if (currentSession) sessionOpts += '<option value="' + currentSession + '">作用域:本会话</option>';
+  sessionOpts += '</select>';
   body.innerHTML =
     '<h3 style="margin:0;font-size:14px;color:#7cc4ff;">Agent 可访问目录</h3>' +
     rows.join('') +
     '<div class="access-add-row">' +
     '<input id="access-path" placeholder="输入要授权的绝对路径,如 /root/天枢/tianshu" onkeydown="if(event.key===\'Enter\')addAccess()">' +
+    sessionOpts +
     '<button class="btn-sm" style="background:#3b82f6;color:#fff;" onclick="addAccess()">授权</button>' +
     '</div>' +
-    '<div class="access-tip">默认情况下,Agent 只能读写其工作区(workspace)与临时敏感区;授权后额外放行对应目录,撤销即刻生效。高危写入仍需人工审批。</div>' +
+    '<div class="access-tip">默认情况下,Agent 只能读写其工作区(workspace)与临时敏感区;授权后额外放行对应目录,撤销即刻生效。会话级授权仅对该会话生效,并发任务互不影响。高危写入仍需人工审批。</div>' +
     '<div id="access-msg"></div>';
 }
 
@@ -464,7 +526,9 @@ async function addAccess() {
   const path = input.value.trim();
   const msg = $('#access-msg');
   if (!path) { return; }
-  const res = await fetch('/api/access', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) });
+  const scopeSel = $('#access-scope');
+  const scope = scopeSel && scopeSel.value !== 'global' ? 'session:' + scopeSel.value : 'global';
+  const res = await api('/api/access', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, scope }) });
   const data = await res.json();
   msg.className = 'access-msg ' + (data.ok ? 'ok' : 'err');
   msg.textContent = data.msg || data.error || '';
@@ -473,9 +537,11 @@ async function addAccess() {
 
 async function delAccess(btn) {
   const rootEl = btn.closest('.access-root');
-  const rootElText = rootEl.querySelector('b').textContent;
+  const path = rootEl.querySelector('b').textContent;
+  const tag = rootEl.querySelector('.tag').textContent;
+  const scope = tag === '全部会话' ? 'global' : 'session:' + tag.replace('本会话(', '').replace(')', '');
   const msg = $('#access-msg');
-  const res = await fetch('/api/access', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: rootElText }) });
+  const res = await api('/api/access', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, scope }) });
   const data = await res.json();
   msg.className = 'access-msg ' + (data.ok ? 'ok' : 'err');
   msg.textContent = data.msg || data.error || '';
@@ -665,7 +731,7 @@ function handleAgentEvent(m) {
 
 async function loadSessions(skipRestore) {
   try {
-    const resp = await fetch('/api/sessions');
+    const resp = await api('/api/sessions');
     const data = await resp.json();
     if (!data.sessions) return;
     currentSession = data.current || (data.sessions[0] || {}).id || '';
@@ -688,7 +754,7 @@ async function restoreMessages(sessionId) {
   loadingSession = true;
   const seq = ++restoreSeq;
   try {
-    const resp = await fetch(`/api/session/${sessionId}/messages`);
+    const resp = await api(`/api/session/${sessionId}/messages`);
     const data = await resp.json();
     if (seq !== restoreSeq) return;
     $('#messages').innerHTML = '';
@@ -701,7 +767,7 @@ async function restoreMessages(sessionId) {
 }
 
 async function switchSession(id) {
-  const resp = await fetch('/api/session/switch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ session_id: id }) });
+  const resp = await api('/api/session/switch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ session_id: id }) });
   const data = await resp.json();
   if (data.ok) {
     currentSession = id;
@@ -715,7 +781,7 @@ sessionList.addEventListener('click', e => {
   if (item) switchSession(item.dataset.id);
 });
 $('#new-session').addEventListener('click', async () => {
-  const resp = await fetch('/api/session', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ title: '新会话' }) });
+  const resp = await api('/api/session', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ title: '新会话' }) });
   const data = await resp.json();
   if (data.ok) {
     $('#messages').innerHTML = '';
@@ -730,7 +796,7 @@ function pct(n) {
 
 async function refreshMonitor() {
   try {
-    const resp = await fetch('/api/memory');
+    const resp = await api('/api/memory');
     const data = await resp.json();
     const cache = data.cache || {};
     const rate = cache.hit_rate || 0;
@@ -800,16 +866,21 @@ function scheduleReconnect() {
 function connectWs() {
   stopHeartbeat();
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws = new WebSocket(`ws://${location.host}/ws?token=${encodeURIComponent(getToken())}`);
   ws.onopen = () => {
     reconnectAttempts = 0;
     $('#status').textContent = '已连接';
     startHeartbeat();
   };
-  ws.onclose = () => {
+  ws.onclose = (ev) => {
     $('#status').textContent = '连接断开,重连中...';
     stopHeartbeat();
-    scheduleReconnect();
+    if (ev.code === 1008) {
+      setToken('');
+      showLogin();
+    } else {
+      scheduleReconnect();
+    }
   };
   ws.onmessage = onWsMessage;
 }
@@ -865,8 +936,13 @@ $('#theme-btn').onclick = () => {
 try { const t = localStorage.getItem('ts-theme'); if (t === 'light') { document.body.dataset.theme = 'light'; $('#theme-btn').textContent = '🌙 深色'; } } catch(e) {}
 $('#input').addEventListener('keydown', e => { if (e.key === 'Enter') ask(); });
 loadPool();
-fetch('/api/state').then(r => r.json()).then(s => $('#agents').textContent = 'Agent: ' + s.agents.join(', '));
-connectWs();
+if (getToken()) {
+  loadSessions(true);
+  api('/api/state').then(r => r.json()).then(s => $('#agents').textContent = 'Agent: ' + s.agents.join(', ')).catch(() => {});
+  connectWs();
+} else {
+  showLogin();
+}
 </script>
 </body>
 </html>

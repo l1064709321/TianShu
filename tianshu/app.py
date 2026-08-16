@@ -4,7 +4,7 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Any
 
-from tianshu.config import SKILLS_DIR, get_provider
+from tianshu.config import SKILLS_DIR, get_provider, settings
 from tianshu.core.agent.runtime import Agent, AgentResult, MessageBus, build_agent_call_tool
 from tianshu.core.identity import load_identity_card
 from tianshu.core.log import get_logger
@@ -212,7 +212,7 @@ class TianshuApp:
 def create_app(
     provider_name: str | None = None,
     model: str = "",
-    review_mode: str = "manual",
+    review_mode: str = "",
     parallel: bool = True,
     session_db: str | None = None,
 ) -> TianshuApp:
@@ -221,6 +221,8 @@ def create_app(
     IDENTITY_CARD = load_identity_card()
 
     bus = MessageBus()
+    if not review_mode:
+        review_mode = "auto_reject" if settings.mode == "headless" else "manual"
     review = ReviewSystem(mode=review_mode)
     skills = SkillRepository(SKILLS_DIR)
     skills.scan()

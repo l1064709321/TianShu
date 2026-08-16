@@ -18,6 +18,7 @@ libpod/$
 wheels/
 .ts-secrets/
 .ts-backups/
+.ts-audit/
 config/models.json
 config/access_roots.json
 config/*.tmp
