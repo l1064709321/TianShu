@@ -19,6 +19,7 @@ import { setProvider } from "./core/rag/service.js";
 import { ReviewSystem } from "./core/review/system.js";
 import { SessionStore } from "./core/session.js";
 import { SkillRepository } from "./core/skills/repository.js";
+import { registerSkillTools } from "./core/skills/tools.js";
 import { registerBuiltinTools } from "./core/tools/builtin.js";
 import { ToolRegistry } from "./core/tools/registry.js";
 
@@ -80,6 +81,7 @@ export function createApp(
   const makeAgent = (name: string, systemPrompt: string): Agent => {
     const registry = new ToolRegistry();
     registerBuiltinTools(registry);
+    registerSkillTools(registry, skills);
     registry.register(buildAgentCallTool(bus));
     return new Agent({
       name,

@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { isIP } from "node:net";
 import { SENSITIVE_DIR, WORKSPACE_DIR } from "../../config.js";
 import { isGranted } from "../access.js";
-import { runInSandbox } from "../sandbox/local.js";
+import { runInSandbox } from "../sandbox/manager.js";
 import { createBackup, listBackups, restoreBackup } from "../backup.js";
 import { ingestFile, ragDocsList, ragQuery } from "../rag/service.js";
 import { autoSnapshot as rollbackAutoSnapshot, listSnapshots, restoreSnapshot, snapshotAll } from "../rollback.js";
