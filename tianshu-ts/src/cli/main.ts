@@ -3,6 +3,46 @@ import { Command } from "commander";
 import { createApp } from "../app.js";
 import { availableProviders } from "../core/llm/factory.js";
 
+async function ensureMockLlmIfNeeded(): Promise<boolean> {
+  const { settings } = await import("../config.js");
+  const cfg = settings.providers.find((p) => p.name === settings.default_provider) ?? settings.providers[0];
+  if (cfg.name !== "mock") return true;
+  const url = new URL(cfg.base_url);
+  const host = url.hostname || "127.0.0.1";
+  const port = url.port ? Number(url.port) : 9100;
+  const base = `http://${host}:${port}`;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 1000);
+    const resp = await fetch(`${base}/healthz`, { signal: controller.signal });
+    clearTimeout(timer);
+    if (resp.ok) return true;
+  } catch {
+    /* mockllm 未运行 */
+  }
+  const { spawn } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const entry = fileURLToPath(new URL("../cli/main.ts", import.meta.url));
+  const child = spawn(process.execPath, ["--import", "tsx", entry, "mockllm", "--host", host, "--port", String(port)], {
+    stdio: "ignore",
+    detached: true,
+  });
+  child.unref();
+  for (let i = 0; i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    try {
+      const resp = await fetch(`${base}/healthz`, { signal: AbortSignal.timeout(1000) });
+      if (resp.ok) {
+        console.log(`==> mockllm 已自动就绪: ${base}(离线 mock 模式)`);
+        return true;
+      }
+    } catch {
+      /* 继续等待 */
+    }
+  }
+  return false;
+}
+
 const program = new Command();
 
 program
@@ -107,16 +147,48 @@ program
 
 program
   .command("web")
-  .description("启动 Web 面板(默认端口 7800)")
+  .description("启动 Web 面板(默认端口 7800,provider 为 mock 时自动拉起 mockllm)")
   .option("--host <host>", "监听地址", "127.0.0.1")
   .option("--port <port>", "监听端口", "7800")
   .option("--provider <name>", "LLM provider 名称")
+  .option("--no-auto-mock", "禁用自动拉起 mockllm")
   .action(async (opts) => {
+    const { settings } = await import("../config.js");
+    if (opts.autoMock) {
+      const ok = await ensureMockLlmIfNeeded();
+      if (!ok) console.error("警告: mockllm 启动失败,对话将不可用,请检查端口占用");
+    }
     const { createWebServer } = await import("../interfaces/web/server.js");
     const server = createWebServer({ host: opts.host, port: Number(opts.port), provider: opts.provider || null });
     server.listen(Number(opts.port), opts.host, () => {
       console.log(`天枢 Web 面板: http://${opts.host}:${opts.port}/`);
     });
+  });
+
+program
+  .command("doctor")
+  .description("检查配置与模型连接是否正常")
+  .option("--timeout <seconds>", "连接测试超时(秒)", "15")
+  .action(async (opts) => {
+    const { getProvider } = await import("../config.js");
+    const { createProvider } = await import("../core/llm/factory.js");
+    const cfg = getProvider();
+    console.log(`当前默认 Provider: ${cfg.name}`);
+    console.log(`  base_url: ${cfg.base_url}`);
+    console.log(`  model:    ${cfg.model}`);
+    console.log(`  api_key:  ${cfg.api_key ? "已配置 " + cfg.api_key.slice(0, 8) + "..." : "(未配置)"}`);
+    const provider = createProvider(cfg.name, cfg.base_url, cfg.model, cfg.api_key, {
+      temperature: cfg.temperature,
+      max_tokens: cfg.max_tokens,
+      timeout: Number(opts.timeout),
+    });
+    try {
+      const result = await provider.chat([{ role: "user", content: "回复'连接正常'四个字即可" }]);
+      console.log(`连接正常,模型回复: ${(result.content ?? "").slice(0, 200)}`);
+    } catch (e) {
+      console.error(`连接失败: ${(e as Error).message}`);
+      process.exitCode = 1;
+    }
   });
 
 program
