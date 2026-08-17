@@ -19,6 +19,7 @@ wheels/
 .ts-secrets/
 .ts-backups/
 .ts-audit/
+.ts-rag/
 config/models.json
 config/access_roots.json
 config/*.tmp

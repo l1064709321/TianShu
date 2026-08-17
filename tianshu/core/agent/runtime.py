@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Coroutine
+from typing import Any
 
 from tianshu.core.llm.base import LLMMessage, ToolCall
 from tianshu.core.llm.factory import create_provider
 from tianshu.core.log import get_logger
 from tianshu.core.review.system import ReviewSystem, gate_tool
-from tianshu.core.tools.registry import ToolRegistry, Tool
+from tianshu.core.tools.registry import Tool, ToolRegistry
 
 logger = get_logger("agent.runtime")
 
@@ -42,11 +42,11 @@ class MessageBus:
     """Agent 之间的消息总线,支持任意 Agent 相互调用与等待回复。"""
 
     def __init__(self) -> None:
-        self._agents: dict[str, "Agent"] = {}
+        self._agents: dict[str, Agent] = {}
         self._pending: dict[str, asyncio.Future[AgentResult]] = {}
         self._lock = asyncio.Lock()
 
-    def register(self, agent: "Agent") -> None:
+    def register(self, agent: Agent) -> None:
         self._agents[agent.name] = agent
 
     def unregister(self, name: str) -> None:
@@ -96,7 +96,7 @@ class Agent:
         history.append(LLMMessage(role="user", content=f"(来自 {sender or '上级'} 的任务)\n{message}"))
         try:
             return await self._run_loop(history)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             logger.exception("Agent %s 运行异常", self.name)
             return AgentResult(content="", error=str(e))
 
@@ -104,6 +104,7 @@ class Agent:
         tool_results: list[ToolResult] = []
         children: list[str] = []
         tools = self.registry.schemas()
+        seen_calls: set[tuple[str, str]] = set()
 
         for i in range(self.max_iterations):
             result = await self.provider.chat(history, tools=tools, cancel_event=self.cancelled)
@@ -121,6 +122,13 @@ class Agent:
             for tc in result.tool_calls:
                 if self.cancelled.is_set():
                     return AgentResult(content="(任务已取消)", tool_calls=tool_results, child_agents=children)
+                call_key = (tc.name, str(sorted(tc.arguments.items())))
+                if call_key in seen_calls:
+                    output = f"错误: 工具 {tc.name} 与之前的调用参数完全相同,疑似死循环,已拦截(重复调用:{call_key[0]})"
+                    tool_results.append(ToolResult(name=tc.name, output="", error=output))
+                    history.append(LLMMessage(role="tool", tool_call_id=tc.id, content=output))
+                    continue
+                seen_calls.add(call_key)
                 if tc.name == "call_agent":
                     child_name = tc.arguments.get("agent", "")
                     await self._emit("agent_action", agent=self.name, action="call_agent", target=child_name)
@@ -146,7 +154,7 @@ class Agent:
         if self.event_sink:
             try:
                 await self.event_sink(self.name, event, data)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("event_sink 异常 agent=%s event=%s", self.name, event)
 
     async def _dispatch_child(self, tc: ToolCall) -> AgentResult:

@@ -15,6 +15,8 @@ from tianshu.core.access import is_granted
 from tianshu.core.backup import create_backup as backup_create
 from tianshu.core.backup import list_backups as backup_list
 from tianshu.core.backup import restore_backup as backup_restore
+from tianshu.core.rag.service import ingest_file as rag_ingest
+from tianshu.core.rag.service import rag_docs_list, rag_query
 from tianshu.core.rollback import auto_snapshot, list_snapshots, restore_snapshot, snapshot_all
 from tianshu.core.tools.registry import RAW, ToolRegistry
 
@@ -237,6 +239,29 @@ def register_builtin_tools(registry: ToolRegistry) -> None:
     )
     async def rollback(snapshot_name: str, target: str) -> str:
         return restore_snapshot(snapshot_name, target)
+
+    @registry.decorator(
+        "document_ingest",
+        description="将文本文件导入知识库(RAG),同名文档自动升版本,旧版本不再被检索(解决新旧答案冲突)",
+        requires_review=True,
+    )
+    async def document_ingest(path: str, title: str = "") -> str:
+        return await rag_ingest(path, title=title)
+
+    @registry.decorator(
+        "document_search",
+        description="在知识库中检索并回答(自动查询改写+多路召回+版本引用,支持 use_hyde 增强)",
+        format_result=RAW,
+    )
+    async def document_search(query: str, top_k: int = 5, use_hyde: bool = False) -> str:
+        result = await rag_query(query, top_k=top_k, use_hyde=use_hyde)
+        return f"【回答】\n{result['answer']}\n\n【命中】\n" + "\n".join(
+            f"- [doc:{h['doc']} v{h['version']}] {h['excerpt']}..." for h in result["hits"]
+        )
+
+    @registry.decorator("list_documents", description="列出知识库已入库文档及其最新版本", format_result=RAW)
+    async def list_documents() -> str:
+        return rag_docs_list()
 
     @registry.decorator("search_files", description="按 glob 模式搜索工作区文件", format_result=RAW)
     async def search_files(pattern: str) -> str:

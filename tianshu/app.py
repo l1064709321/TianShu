@@ -86,6 +86,9 @@ class TianshuApp:
             "热切换模型: name=%s base=%s model=%s keys=%d preferred=%s",
             provider_name, base_url, model, len(keys or []), bool(preferred_key),
         )
+        from tianshu.core.rag.service import set_provider
+
+        set_provider(next(iter(self.agents.values())).provider)
 
     async def run_exclusive(self, coro):
         async with self.busy_lock:
@@ -274,16 +277,24 @@ def create_app(
         "assistant",
         "你是通用助手 Agent,负责自然语言对话与答疑。可加载 chat 技能。",
     )
+    judge = _make(
+        "judge",
+        "你是评审裁决 Agent,负责交叉验证多 Agent 结论的一致性、标注冲突与证据支持度并给出裁决建议。先加载 judge 技能。",
+    )
 
-    for a in (main, coder, crawler, assistant):
+    for a in (main, coder, crawler, assistant, judge):
         bus.register(a)
+
+    from tianshu.core.rag.service import set_provider
+
+    set_provider(main.provider)
 
     orch = Orchestrator(main, bus=bus, parallel=parallel, event_sink=event_sink)
     app = TianshuApp(bus=bus, orchestrator=orch, review=review, skills=skills, agents=bus._agents, default_worker="assistant", cancel_event=cancel_event)
     app.memory = ProjectMemory()
     monitor = CacheMonitor()
     app.cache_monitor = monitor
-    for a in (main, coder, crawler, assistant):
+    for a in (main, coder, crawler, assistant, judge):
         a.provider.usage_hook = monitor.record
     if session_db is not None:
         app.sessions = SessionStore(session_db)
