@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { WORKSPACE_DIR } from "../../config.js";
 
 const MAX_MEMORY_MB = 512;
@@ -10,22 +12,59 @@ export interface SandboxResult {
   err: string | null;
 }
 
-export function wrapWithUlimit(args: string[], timeout: number): string[] {
+let hardenedLevel: number | null = null;
+
+function isRoot(): boolean {
+  try {
+    return process.getuid?.() === 0;
+  } catch {
+    return false;
+  }
+}
+
+function ensureTraversable(ws: string): void {
+  if (!isRoot()) return;
+  const parts: string[] = [];
+  let cur = path.resolve(ws);
+  parts.push(cur);
+  while (cur !== path.parse(cur).root) {
+    cur = path.dirname(cur);
+    parts.push(cur);
+  }
+  for (const dir of parts) {
+    try {
+      const mode = fs.statSync(dir).mode & 0o777;
+      if ((mode & 0o1) === 0) fs.chmodSync(dir, mode | 0o1);
+    } catch {
+      /* 目录可能不存在,忽略 */
+    }
+  }
+}
+
+function scriptFor(cwd: string, timeout: number, level: number, args: string[]): string[] {
   const memKb = MAX_MEMORY_MB * 1024;
-  const script = [
+  const limits = [
     `ulimit -v ${memKb} 2>/dev/null;`,
     `ulimit -t ${MAX_CPU_SECONDS} 2>/dev/null;`,
     `ulimit -u ${MAX_PROCESSES} 2>/dev/null;`,
-    `timeout ${timeout} "$@" ||`,
-    `{ rc=$?; [ $rc -eq 124 ] && echo '__SANDBOX_TIMEOUT__' >&2; exit $rc; }`,
   ].join(" ");
-  return ["/bin/bash", "-c", script, "sandbox", ...args];
+  const cd = `cd "$1" 2>/dev/null || true; shift 2>/dev/null;`;
+  let execLine: string;
+  if (level >= 3) {
+    execLine = `exec unshare --mount --net --pid --fork runuser -u nobody -- timeout ${timeout} "$@"`;
+  } else if (level === 2) {
+    execLine = `exec unshare --net --fork runuser -u nobody -- timeout ${timeout} "$@"`;
+  } else if (level === 1) {
+    execLine = `exec runuser -u nobody -- timeout ${timeout} "$@"`;
+  } else {
+    execLine = `timeout ${timeout} "$@" || { rc=$?; [ $rc -eq 124 ] && echo '__SANDBOX_TIMEOUT__' >&2; exit $rc; }`;
+  }
+  return ["/bin/bash", "-c", `${limits} ${cd} ${execLine}`, "sandbox", cwd, ...args];
 }
 
-export function runInLocalSandbox(args: string[], cwd: string, timeout: number): Promise<SandboxResult> {
+function runOnce(script: string[], cwd: string, timeout: number): Promise<SandboxResult> {
   return new Promise((resolve) => {
-    const full = wrapWithUlimit(args, timeout);
-    const proc = spawn(full[0], full.slice(1), { cwd });
+    const proc = spawn(script[0], script.slice(1), { cwd });
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => {
@@ -48,6 +87,48 @@ export function runInLocalSandbox(args: string[], cwd: string, timeout: number):
       resolve({ out: stdout, err });
     });
   });
+}
+
+function legacyFails(err: string | null): boolean {
+  if (!err) return false;
+  return /unshare|runuser|nobody|Operation not permitted|cannot set.*namespace/i.test(err);
+}
+
+export function wrapWithUlimit(args: string[], timeout: number): string[] {
+  return scriptFor("", timeout, 0, args);
+}
+
+export async function runInLocalSandbox(args: string[], cwd: string, timeout: number): Promise<SandboxResult> {
+  const baseCwd = cwd || WORKSPACE_DIR;
+  if (hardenedLevel === null) {
+    if (!isRoot()) {
+      hardenedLevel = 0;
+    } else {
+      hardenedLevel = 0;
+      const candidates: Array<{ level: number; probe: string | null }> = [
+        { level: 3, probe: "true" },
+        { level: 2, probe: "true" },
+        { level: 1, probe: "true" },
+      ];
+      for (const c of candidates) {
+        const script = scriptFor(baseCwd, 10, c.level, ["true"]);
+        const probe = await runOnce(script, baseCwd, 10);
+        if (!probe.err && probe.out.trim() === "") {
+          hardenedLevel = c.level;
+          break;
+        }
+        if (c.level === 1 && legacyFails(probe.err)) continue;
+      }
+      if (hardenedLevel === 0) {
+        const script = scriptFor(baseCwd, 10, 0, ["true"]);
+        const probe = await runOnce(script, baseCwd, 10);
+        if (!probe.err && probe.out.trim() === "") hardenedLevel = 0;
+      }
+    }
+  }
+  if (hardenedLevel > 0) ensureTraversable(baseCwd);
+  const script = scriptFor(baseCwd, timeout, hardenedLevel ?? 0, args);
+  return runOnce(script, baseCwd, timeout);
 }
 
 export async function detectBackend(): Promise<string> {
