@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import time
 import urllib.request
-
-import pytest
 
 from tianshu.cli.main import _ensure_mockllm_if_needed
 
@@ -31,6 +28,7 @@ def test_ensure_mockllm_starts_when_unreachable(monkeypatch):
         p = subprocess.run(
             ["pgrep", "-f", f"[m]ockllm.*{port}"],
             capture_output=True, text=True,
+            check=False,
         )
         assert p.returncode == 0
         proc = p.stdout.strip()
@@ -38,13 +36,12 @@ def test_ensure_mockllm_starts_when_unreachable(monkeypatch):
         if proc:
             import subprocess as sp
 
-            sp.run(["kill", proc], capture_output=True)
+            sp.run(["kill", proc], capture_output=True, check=False)
         settings.providers = original_providers
         settings.default_provider = original_default
 
 
 def test_ensure_mockllm_skips_when_reachable(monkeypatch):
-    proc = None
     started = {"n": 0}
 
     import subprocess

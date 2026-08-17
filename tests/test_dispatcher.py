@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from tianshu.core.llm.base import LLMError, LLMMessage, LLMResult
 from tianshu.core.llm.dispatcher import (
     DispatchConfig,
     Dispatcher,
@@ -12,7 +12,6 @@ from tianshu.core.llm.dispatcher import (
     RoutingStrategy,
     create_dispatcher_from_providers,
 )
-from tianshu.core.llm.base import LLMMessage, LLMResult, LLMError
 
 
 def _make_result(content: str = "ok") -> LLMResult:
@@ -49,7 +48,6 @@ async def test_dispatcher_weighted_failover():
     call_log = []
 
     async def mock_chat(messages, tools=None, cancel_event=None):
-        provider = messages
         call_log.append(1)
         if len(call_log) == 1:
             raise LLMError("host1 down")
@@ -69,9 +67,11 @@ async def test_dispatcher_all_fail():
     dispatcher.add_deployment("g1", "p1", "http://fail1/v1", "m1")
     p = MagicMock()
     p.chat = AsyncMock(side_effect=LLMError("connection refused"))
-    with patch("tianshu.core.llm.dispatcher.create_provider", return_value=p):
-        with pytest.raises(LLMError, match="所有模型组均失败"):
-            await dispatcher.chat([LLMMessage(role="user", content="hi")])
+    with (
+        patch("tianshu.core.llm.dispatcher.create_provider", return_value=p),
+        pytest.raises(LLMError, match="所有模型组均失败"),
+    ):
+        await dispatcher.chat([LLMMessage(role="user", content="hi")])
 
 
 @pytest.mark.asyncio

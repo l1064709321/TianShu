@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import asyncio
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import pytest
 
-from tianshu.core.tools.builtin import fetch_url_guarded, run_shell_guarded
+from tianshu.core.tools.builtin import fetch_url_guarded, register_builtin_tools, run_shell_guarded
 from tianshu.core.tools.registry import ToolRegistry
-from tianshu.core.tools.builtin import register_builtin_tools
 
 
 async def test_shell_allowlist_rejects_interpreters():
@@ -32,7 +30,7 @@ async def test_shell_allowlist_rejects_rmtree_bypass():
         await run_shell_guarded("python3 -c 'import shutil\nshutil.rmtree(\"/tmp\")'")
 
 
-async def _httpbin_alive() -> bool:
+def _httpbin_alive() -> bool:
     try:
         import urllib.request
 
@@ -43,7 +41,7 @@ async def _httpbin_alive() -> bool:
 
 
 async def test_fetch_redirect_to_private_blocked():
-    if not await _httpbin_alive():
+    if not _httpbin_alive():
         pytest.skip("httpbin 不可达")
     hit = []
 
@@ -127,8 +125,8 @@ async def test_fetch_mark_untrusted():
 
 async def test_secret_zone_writable_and_readable():
     from tianshu.config import PROJECT_ROOT, SENSITIVE_DIR, WORKSPACE_DIR
-    from tianshu.core.tools.registry import ToolRegistry
     from tianshu.core.tools.builtin import register_builtin_tools
+    from tianshu.core.tools.registry import ToolRegistry
 
     registry = ToolRegistry()
     register_builtin_tools(registry)

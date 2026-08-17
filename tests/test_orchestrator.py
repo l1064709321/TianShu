@@ -4,7 +4,7 @@ import pytest
 
 from tianshu.core.agent.runtime import Agent
 from tianshu.core.llm.base import LLMResult, ToolCall
-from tianshu.core.orchestrator.service import Orchestrator, Orchestration, _parse_plan
+from tianshu.core.orchestrator.service import Orchestration, Orchestrator, _parse_plan
 
 
 class PlanningProvider:

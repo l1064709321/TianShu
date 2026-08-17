@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from tianshu.core.skills.repository import SkillRepository, _parse_frontmatter
 
 

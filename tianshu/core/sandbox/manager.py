@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 from tianshu.core.log import get_logger
 
@@ -26,7 +25,7 @@ async def detect_backend() -> str:
             _backend = "docker"
             logger.info("沙箱后端: docker")
             return _backend
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.exception("docker 探测失败")
     _backend = "local"
     logger.info("沙箱后端: local(降级,无 Docker)")

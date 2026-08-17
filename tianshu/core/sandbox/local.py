@@ -3,13 +3,11 @@ from __future__ import annotations
 import asyncio
 import os
 import resource
-import shlex
 import tempfile
 from pathlib import Path
-from typing import Any
 
-from tianshu.core.log import get_logger
 from tianshu.config import PROJECT_ROOT
+from tianshu.core.log import get_logger
 
 logger = get_logger("sandbox.local")
 
@@ -49,11 +47,13 @@ def _resource_limits() -> None:
 def _wrap_with_ulimit(args: list[str], timeout: int) -> list[str]:
     mem_kb = MAX_MEMORY_MB * 1024
     timeout += 2
-    prefix = [
-        "/bin/bash", "-c",
+    script = (
         f"ulimit -v {mem_kb} 2>/dev/null; ulimit -t {MAX_CPU_SECONDS} 2>/dev/null; "
         f"ulimit -u 256 2>/dev/null; timeout {timeout} \"$@\" || "
-        f"{{ rc=$?; [ $rc -eq 124 ] && echo '__SANDBOX_TIMEOUT__' >&2; exit $rc; }}",
+        f"{{ rc=$?; [ $rc -eq 124 ] && echo '__SANDBOX_TIMEOUT__' >&2; exit $rc; }}"
+    )
+    prefix = [
+        "/bin/bash", "-c", script,
         "sandbox",
         *args,
     ]
@@ -86,7 +86,7 @@ async def run_in_local_sandbox(
             return "", f"命令不存在: {args[0]}"
         try:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout + 5)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             return "", "(命令超时,已终止)"
         out = stdout.decode(errors="replace")

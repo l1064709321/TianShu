@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
-import shlex
 from pathlib import Path
-from typing import Any
 
-from tianshu.config import PROJECT_ROOT, SENSITIVE_DIR
+from tianshu.config import PROJECT_ROOT
 from tianshu.core.log import get_logger
 
 logger = get_logger("sandbox.docker")
@@ -29,7 +26,7 @@ async def _run_docker(
         return "", "docker 命令不存在"
     try:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         try:
             proc.kill()
         except ProcessLookupError:
@@ -39,7 +36,7 @@ async def _run_docker(
                 await asyncio.create_subprocess_exec(
                     *kill_cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL
                 )
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001,S110
                 pass
         return "", "(docker 操作超时,已强杀)"
     out = stdout.decode(errors="replace").strip()
@@ -50,18 +47,18 @@ async def _run_docker(
 
 
 async def docker_available() -> bool:
-    out, err = await _run_docker(["info", "--format", "{{.ServerVersion}}"], timeout=15)
+    _, err = await _run_docker(["info", "--format", "{{.ServerVersion}}"], timeout=15)
     return err is None
 
 
 async def ensure_image(force_rebuild: bool = False) -> str | None:
     if not force_rebuild:
-        out, err = await _run_docker(["image", "inspect", IMAGE_NAME, "--format", "{{.Id}}"], timeout=15)
+        _, err = await _run_docker(["image", "inspect", IMAGE_NAME, "--format", "{{.Id}}"], timeout=15)
         if err is None:
             return IMAGE_NAME
     df_path = PROJECT_ROOT / "tianshu" / "core" / "sandbox" / "Dockerfile"
     df_path.write_text(DOCKERFILE, encoding="utf-8")
-    out, err = await _run_docker(
+    _, err = await _run_docker(
         ["build", "-t", IMAGE_NAME, "-f", str(df_path), str(df_path.parent)],
         timeout=300,
     )

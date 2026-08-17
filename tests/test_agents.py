@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from tianshu.core.agent.runtime import Agent, AgentResult, MessageBus, build_agent_call_tool
-from tianshu.core.tools.registry import ToolRegistry, Tool
+from tianshu.core.tools.registry import Tool, ToolRegistry
 
 
 class FakeProvider:

@@ -1,4 +1,3 @@
-import tempfile
 from pathlib import Path
 
 from tianshu.core.memory import ProjectMemory, approx_tokens, load_conversation_context
@@ -28,7 +27,7 @@ def test_max_per_block(tmp_path):
     for i in range(15):
         m.add_entry("progress", f"进度条目 {i}", max_per_block=10)
     blocks = m.load()
-    prog = [b for b in blocks if b.key == "progress"][0]
+    prog = next(b for b in blocks if b.key == "progress")
     assert len(prog.entries) == 10
     assert prog.entries[0] == "进度条目 14"
 
@@ -67,12 +66,12 @@ def test_update_from_result(tmp_path):
     class St:
         task = "修复前端 bug"
         summary = "修好了复制按钮"
-        subtasks = []
+        subtasks = []  # noqa: RUF012
 
     ok = m.update_from_result(St())
     assert ok["memorized"]
     blocks = m.load()
-    prog = [b for b in blocks if b.key == "progress"][0]
+    prog = next(b for b in blocks if b.key == "progress")
     assert any("修复前端 bug" in e for e in prog.entries)
 
 
@@ -87,11 +86,11 @@ def test_update_from_result_error_blocker(tmp_path):
             worker = "ops"
             error = "端口占用"
 
-        subtasks = [S()]
+        subtasks = [S()]  # noqa: RUF012
 
     m.update_from_result(St())
     blocks = m.load()
-    blk = [b for b in blocks if b.key == "blockers"][0]
+    blk = next(b for b in blocks if b.key == "blockers")
     assert any("端口占用" in e for e in blk.entries)
 
 
@@ -121,7 +120,6 @@ def test_build_summarize_prompt():
 
 
 async def test_summary_table_roundtrip(tmp_path):
-    import aiosqlite
 
     from tianshu.core.session import SessionStore
     db = tmp_path / "s.db"

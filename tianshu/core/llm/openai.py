@@ -26,7 +26,7 @@ class OpenAIProvider(BaseProvider):
         if self.usage_hook and result.usage:
             try:
                 self.usage_hook(self.model, result.usage)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("usage_hook 异常 model=%s", self.model)
         return result
 

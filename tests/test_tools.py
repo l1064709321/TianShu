@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from tianshu.core.tools.registry import ToolRegistry, Tool
+from tianshu.core.tools.registry import Tool, ToolRegistry
 
 
 def test_register_and_schema():

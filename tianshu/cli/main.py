@@ -162,7 +162,7 @@ def _ensure_mockllm_if_needed() -> None:
     try:
         urllib.request.urlopen(f"{base}/healthz", timeout=1)
         return
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001,S110
         pass
     subprocess.Popen(
         [sys.executable, "-m", "tianshu", "mockllm", "--host", host, "--port", str(port)],
@@ -176,7 +176,7 @@ def _ensure_mockllm_if_needed() -> None:
             urllib.request.urlopen(f"{base}/healthz", timeout=1)
             print(f"==> mockllm 已自动就绪: {base}(离线 mock 模式)")
             return
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001,S112
             continue
     print("警告: mockllm 启动失败,对话将不可用,请检查端口占用", file=sys.stderr)
 

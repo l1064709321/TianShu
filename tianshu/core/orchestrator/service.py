@@ -49,7 +49,7 @@ class Orchestrator:
         main_agent: Agent,
         bus: MessageBus | None = None,
         parallel: bool = True,
-        max_workers: int = None,
+        max_workers: int | None = None,
         decompose_iterations: int = 3,
         event_sink=None,
     ) -> None:
@@ -93,7 +93,7 @@ class Orchestrator:
     async def _emit(self, event: str, **data: Any) -> None:
         try:
             await self.event_sink("orchestrator", event, data)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("event_sink 异常 event=%s", event)
 
     async def decompose(self, task: str, planning_prompt: str = "", context: str = "") -> Orchestration:
@@ -126,7 +126,7 @@ class Orchestrator:
             st.status = st.result.error or "done"
             if st.result.error:
                 st.status = "error"
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             st.status = "failed"
             st.error = str(e)
             logger.exception("子任务执行失败 worker=%s goal=%s", st.worker, st.goal[:100])
@@ -192,7 +192,7 @@ def _parse_plan(task: str, result) -> Orchestration:
     import json as _json
     import re as _re
 
-    m = _re.search(r"\{.*\}", raw, _re.S)
+    m = _re.search(r"\{.*\}", raw, _re.DOTALL)
     if m:
         try:
             data = _json.loads(m.group(0))

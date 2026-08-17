@@ -31,13 +31,12 @@ def build_mock_app() -> FastAPI:
         content = last_user
         has_user_msg = any(m.get("role") == "user" for m in messages)
 
-        if tools and has_user_msg:
-            if not _contains_tool_result(messages):
-                first = tool_names[0]
-                fn = _pick_tool_fn(first, last_user)
-                return _resp(
-                    content=None,
-                    tool_calls=[
+        if tools and has_user_msg and not _contains_tool_result(messages):
+            first = tool_names[0]
+            fn = _pick_tool_fn(first, last_user)
+            return _resp(
+                content=None,
+                tool_calls=[
                         {
                             "id": "call_mock_1",
                             "type": "function",

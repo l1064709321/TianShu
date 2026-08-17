@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 
 import pytest
 
 from tianshu.core.sandbox.manager import run_in_sandbox
-from tianshu.core.tools.builtin import run_shell_guarded, fetch_url_guarded
+from tianshu.core.tools.builtin import fetch_url_guarded, run_shell_guarded
 
 pytestmark = pytest.mark.asyncio
 
@@ -28,7 +27,7 @@ async def test_sandbox_python_deps_available():
 
 
 async def test_sandbox_memory_limit():
-    out, err = await run_in_sandbox(
+    out, _ = await run_in_sandbox(
         ["python3", "-c", "x = [bytearray(1024*1024) for _ in range(2000)]"],
         Path.cwd(),
         timeout=15,
@@ -37,7 +36,7 @@ async def test_sandbox_memory_limit():
 
 
 async def test_sandbox_cpu_timeout():
-    out, err = await run_in_sandbox(
+    out, _ = await run_in_sandbox(
         ["python3", "-c", "import time; time.sleep(60)"],
         Path.cwd(),
         timeout=3,
