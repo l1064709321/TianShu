@@ -25,6 +25,7 @@ export class ReviewSystem {
   mode: string;
   private _pending = new Map<string, ReviewRequest>();
   private _events = new Map<string, { resolve: () => void }>();
+  private _timers = new Map<string, NodeJS.Timeout>();
   private _subscribers: ReviewCallback[] = [];
 
   constructor(mode = "manual") {
@@ -84,11 +85,13 @@ export class ReviewSystem {
     });
     this._events.set(req.id, evt);
     for (const cb of this._subscribers) cb(req);
-    const timer = new Promise<void>((resolve) => setTimeout(resolve, timeout * 1000));
-    await Promise.race([eventPromise, timer]);
-    if (req.status === ReviewStatus.PENDING) {
-      this._decide(req, ReviewStatus.TIMEOUT, "timeout");
-    }
+    const timer = setTimeout(() => {
+      if (req.status === ReviewStatus.PENDING) {
+        this._decide(req, ReviewStatus.TIMEOUT, "timeout");
+      }
+    }, timeout * 1000);
+    this._timers.set(req.id, timer);
+    await eventPromise;
     return req;
   }
 
@@ -107,6 +110,11 @@ export class ReviewSystem {
     if (evt) {
       this._events.delete(req.id);
       evt.resolve();
+    }
+    const timer = this._timers.get(req.id);
+    if (timer) {
+      clearTimeout(timer);
+      this._timers.delete(req.id);
     }
   }
 }

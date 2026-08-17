@@ -5,7 +5,9 @@ import * as fs from "node:fs";
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const PROJECT_ROOT = path.resolve(here, "../..");
 export const SKILLS_DIR = path.join(PROJECT_ROOT, "skills");
-export const WORKSPACE_DIR = path.join(PROJECT_ROOT, "workspace");
+export const WORKSPACE_DIR = process.env.TIANSHU_WORKSPACE
+  ? path.resolve(process.env.TIANSHU_WORKSPACE)
+  : path.join(PROJECT_ROOT, "workspace");
 export const SENSITIVE_DIR = path.join(WORKSPACE_DIR, ".ts-secrets");
 
 const ENV_FILE = process.env.TIANSHU_ENV || path.join(PROJECT_ROOT, ".env");

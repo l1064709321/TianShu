@@ -4,6 +4,9 @@ import { isIP } from "node:net";
 import { SENSITIVE_DIR, WORKSPACE_DIR } from "../../config.js";
 import { isGranted } from "../access.js";
 import { runInSandbox } from "../sandbox/local.js";
+import { createBackup, listBackups, restoreBackup } from "../backup.js";
+import { ingestFile, ragDocsList, ragQuery } from "../rag/service.js";
+import { autoSnapshot as rollbackAutoSnapshot, listSnapshots, restoreSnapshot, snapshotAll } from "../rollback.js";
 import type { ToolRegistry } from "./registry.js";
 import { Tool } from "./registry.js";
 
@@ -208,7 +211,7 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
     },
     func: async ({ path: p, content }) => {
       const f = ensureInsideWorkspace(resolvePath(String(p)));
-      if (fs.existsSync(f)) autoSnapshot(f);
+      if (fs.existsSync(f)) rollbackAutoSnapshot(f);
       fs.mkdirSync(path.dirname(f), { recursive: true });
       fs.writeFileSync(f, String(content), "utf-8");
       return `已写入 ${p} (${String(content).length} 字符)`;
@@ -307,6 +310,121 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
       }
       return `已清理 ${n} 个敏感文件`;
     },
+  }));
+
+  registry.register(new Tool({
+    name: "snapshot",
+    description: "为工作区建立全量快照(可带标签),出错时可用 list_snapshots + rollback 恢复",
+    requires_review: true,
+    parameters: {
+      type: "object",
+      properties: { label: { type: "string", description: "快照标签,默认 manual" } },
+    },
+    func: async ({ label }) => snapshotAll(String(label ?? "manual")),
+  }));
+
+  registry.register(new Tool({
+    name: "list_snapshots",
+    description: "列出可选回滚快照",
+    format_result: "RAW",
+    parameters: {
+      type: "object",
+      properties: { limit: { type: "integer", description: "显示数量,默认 10" } },
+    },
+    func: async ({ limit }) => listSnapshots(Number(limit ?? 10)),
+  }));
+
+  registry.register(new Tool({
+    name: "rollback",
+    description: "从指定快照恢复文件或目录(危险,覆盖当前内容,需审批);恢复前会自动备份当前版本",
+    requires_review: true,
+    parameters: {
+      type: "object",
+      properties: {
+        snapshot_name: { type: "string", description: "快照名称" },
+        target: { type: "string", description: "要恢复的文件或目录路径" },
+      },
+      required: ["snapshot_name", "target"],
+    },
+    func: async ({ snapshot_name, target }) => restoreSnapshot(String(snapshot_name), String(target)),
+  }));
+
+  registry.register(new Tool({
+    name: "create_backup",
+    description: "生成关键配置整包备份(config/models.json、.env、tianshu.db、身份卡片)为压缩文件 backup-*.tar.gz",
+    requires_review: true,
+    parameters: {
+      type: "object",
+      properties: { label: { type: "string", description: "备份标签" } },
+    },
+    func: async ({ label }) => createBackup(String(label ?? "manual")),
+  }));
+
+  registry.register(new Tool({
+    name: "list_backups",
+    description: "列出可恢复的备份压缩文件及其内容",
+    format_result: "RAW",
+    parameters: { type: "object", properties: {} },
+    func: async () => listBackups(),
+  }));
+
+  registry.register(new Tool({
+    name: "restore_backup",
+    description: "从备份压缩文件恢复单个关键配置(仅 models.json/.env/tianshu.db/identity-card,危险,需审批);恢复前自动建 pre-restore 备份",
+    requires_review: true,
+    parameters: {
+      type: "object",
+      properties: {
+        backup: { type: "string", description: "备份文件名称" },
+        target: { type: "string", description: "要恢复的目标(仅允许 models.json/.env/tianshu.db/identity-card)" },
+      },
+      required: ["backup", "target"],
+    },
+    func: async ({ backup, target }) => restoreBackup(String(backup), String(target)),
+  }));
+
+  registry.register(new Tool({
+    name: "document_ingest",
+    description: "将文本文件导入知识库(RAG),同名文档自动升版本,旧版本不再被检索(解决新旧答案冲突)",
+    requires_review: true,
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "要导入的文件路径" },
+        title: { type: "string", description: "文档标题,默认取文件名" },
+      },
+      required: ["path"],
+    },
+    func: async ({ path: p, title }) => ingestFile(String(p), "", String(title ?? "")),
+  }));
+
+  registry.register(new Tool({
+    name: "document_search",
+    description: "在知识库中检索并回答(自动查询改写+多路召回+版本引用,支持 use_hyde 增强)",
+    format_result: "RAW",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "检索问题" },
+        top_k: { type: "integer", description: "返回条数,默认 5" },
+        use_hyde: { type: "boolean", description: "是否启用 HyDE 增强" },
+      },
+      required: ["query"],
+    },
+    func: async ({ query, top_k, use_hyde }) => {
+      const result = await ragQuery(String(query), Number(top_k ?? 5), Boolean(use_hyde));
+      return `【回答】\n${result.answer}\n\n【命中】\n` + result.hits
+        .map((h) => `- [doc:${h.doc} v${h.version}] ${h.excerpt}...`)
+        .join("\n");
+    },
+  }));
+
+  registry.register(new Tool({
+    name: "list_documents",
+    description: "列出知识库已入库文档及其最新版本",
+    format_result: "RAW",
+    parameters: { type: "object", properties: {} },
+    func: async () => ragDocsList(),
   }));
 
   registry.register(new Tool({
