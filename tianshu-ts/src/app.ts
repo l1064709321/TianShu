@@ -1,6 +1,7 @@
 import { SKILLS_DIR, getProvider, settings } from "./config.js";
 import { Agent, MessageBus, buildAgentCallTool } from "./core/agent/runtime.js";
 import { loadIdentityCard } from "./core/identity.js";
+import { createProvider } from "./core/llm/factory.js";
 import { CancellationToken } from "./core/llm/types.js";
 import {
   CacheMonitor,
@@ -10,8 +11,11 @@ import {
   extractWords,
   loadConversationContext,
 } from "./core/memory.js";
+import { KeySelectorProvider } from "./core/modelpool/service.js";
+import { PoolStore } from "./core/modelpool/store.js";
 import { Orchestrator, serializeSubtask } from "./core/orchestrator/service.js";
 import type { Orchestration } from "./core/orchestrator/service.js";
+import { setProvider } from "./core/rag/service.js";
 import { ReviewSystem } from "./core/review/system.js";
 import { SessionStore } from "./core/session.js";
 import { SkillRepository } from "./core/skills/repository.js";
@@ -35,10 +39,24 @@ export interface TianshuApp {
   history_recent_keep: number;
   cancel_event: CancellationToken;
   busy: boolean;
+  pool_store: PoolStore;
   ask: (task: string, useOrchestrator?: boolean) => Promise<Orchestration>;
   state: () => Record<string, unknown>;
   newSession: (title?: string) => string;
   cancel: () => void;
+  clearCancel: () => void;
+  isBusy: () => boolean;
+  setEventHandler: (handler: (agent: string, event: string, data: Record<string, unknown>) => void) => void;
+  rebindProvider: (opts: {
+    name: string;
+    baseUrl: string;
+    model: string;
+    apiKey?: string;
+    keys?: Array<Record<string, unknown>>;
+    preferredKey?: string;
+    temperature?: number;
+    maxTokens?: number | null;
+  }) => void;
 }
 
 export function createApp(
@@ -57,6 +75,7 @@ export function createApp(
 
   const bus = new MessageBus();
   const cancelEvent = new CancellationToken();
+  let eventSink: (agent: string, event: string, data: Record<string, unknown>) => Promise<void> = async () => {};
 
   const makeAgent = (name: string, systemPrompt: string): Agent => {
     const registry = new ToolRegistry();
@@ -75,7 +94,7 @@ export function createApp(
       review,
       temperature: cfg.temperature,
       max_tokens: cfg.max_tokens,
-      event_sink: async () => {},
+      event_sink: eventSink,
       cancelled: cancelEvent,
     });
   };
@@ -94,8 +113,9 @@ export function createApp(
   );
 
   for (const a of [main, coder, crawler, assistant, judge]) bus.register(a);
+  setProvider(main.provider);
 
-  const orch = new Orchestrator(main, bus, parallel, null, 3, async () => {});
+  const orch = new Orchestrator(main, bus, parallel, null, 3, eventSink);
   const monitor = new CacheMonitor();
   for (const a of [main, coder, crawler, assistant, judge]) {
     a.provider.usage_hook = monitor.record.bind(monitor);
@@ -103,6 +123,7 @@ export function createApp(
 
   const memory = new ProjectMemory();
   const sessions = sessionDb !== null ? new SessionStore(sessionDb) : null;
+  const poolStore = new PoolStore();
   const state: TianshuApp = {
     bus,
     orchestrator: orch,
@@ -116,6 +137,7 @@ export function createApp(
     memory_budget: 800,
     memory_stats: {},
     cache_monitor: monitor,
+    pool_store: poolStore,
     history_summarize_threshold: 12,
     history_recent_keep: 6,
     cancel_event: cancelEvent,
@@ -128,6 +150,56 @@ export function createApp(
     },
     cancel(): void {
       cancelEvent.set();
+    },
+    clearCancel(): void {
+      cancelEvent.clear();
+    },
+    isBusy(): boolean {
+      return state.busy;
+    },
+    setEventHandler(handler: (agent: string, event: string, data: Record<string, unknown>) => void): void {
+      const wrapped = async (agent: string, event: string, data: Record<string, unknown>) => handler(agent, event, data);
+      eventSink = wrapped;
+      for (const a of state.agents.values()) a.event_sink = wrapped;
+      orch.event_sink = wrapped;
+    },
+    rebindProvider(opts: {
+      name: string;
+      baseUrl: string;
+      model: string;
+      apiKey?: string;
+      keys?: Array<Record<string, unknown>>;
+      preferredKey?: string;
+      temperature?: number;
+      maxTokens?: number | null;
+    }): void {
+      const temperature = opts.temperature ?? 0.2;
+      const maxTokens = opts.maxTokens ?? null;
+      for (const a of state.agents.values()) {
+        const children = (opts.keys ?? []).filter((k) => k.value);
+        if (children.length) {
+          const sel = new KeySelectorProvider(
+            opts.name,
+            opts.baseUrl,
+            opts.model,
+            children as never,
+            opts.preferredKey ?? "",
+            temperature,
+            maxTokens,
+          );
+          sel.bindStore((vendor, kid, status, error) => poolStore.touchKey(vendor, kid, status, error));
+          sel.usage_hook = monitor.record.bind(monitor);
+          a.provider = sel;
+        } else {
+          const prov = createProvider(opts.name, opts.baseUrl, opts.model, opts.apiKey ?? "", {
+            temperature,
+            max_tokens: maxTokens,
+          });
+          prov.usage_hook = monitor.record.bind(monitor);
+          a.provider = prov;
+        }
+      }
+      setProvider(state.agents.get("orchestrator")!.provider);
     },
     async ask(task: string, useOrchestrator = true): Promise<Orchestration> {
       cancelEvent.clear();

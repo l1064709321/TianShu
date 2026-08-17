@@ -1,0 +1,948 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>天枢</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body[data-theme="light"] { --bg:#f5f6f8; --panel:#fff; --border:#e2e5ea; --text:#1a202c; --muted:#6b7280; --agentbg:#eef1f6; --codebg:#f0f2f5; }
+  body { margin: 0; font-family: system-ui, sans-serif; background: #0f1115; color: #e6e6e6; height: 100vh; display: flex; flex-direction: column; }
+  body[data-theme="light"] { background: var(--bg); color: var(--text); }
+  header { padding: 12px 20px; background: #161a22; border-bottom: 1px solid #262b36; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  body[data-theme="light"] header { background: var(--panel); border-bottom-color: var(--border); }
+  header h1 { font-size: 16px; margin: 0; color: #7cc4ff; }
+  header .spacer { flex: 1; }
+  .pill { font-size: 12px; color: #8b93a3; }
+  select { background: #0f1115; border: 1px solid #2b313d; border-radius: 8px; padding: 6px 10px; color: #e6e6e6; font-size: 13px; outline: none; max-width: 320px; }
+  select:focus { border-color: #3b82f6; }
+  #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: 78%; padding: 10px 14px; border-radius: 10px; white-space: pre-wrap; font-size: 14px; line-height: 1.6; }
+  .user { align-self: flex-end; background: #1d4ed8; }
+  .agent { align-self: flex-start; background: #232936; }
+  .meta { font-size: 11px; color: #8b93a3; margin-bottom: 4px; }
+  .subtask { margin: 4px 0; padding: 6px 10px; background: #1a1f2a; border-left: 3px solid #3a5a8c; border-radius: 4px; font-size: 13px; }
+  #inputbar { display: flex; gap: 10px; padding: 14px 20px; background: #161a22; border-top: 1px solid #262b36; }
+  #input { flex: 1; background: #0f1115; border: 1px solid #2b313d; border-radius: 8px; padding: 10px 14px; color: #e6e6e6; font-size: 14px; outline: none; }
+  #input:focus { border-color: #3b82f6; }
+  button { background: #1d4ed8; border: none; color: #fff; border-radius: 8px; padding: 10px 18px; font-size: 14px; cursor: pointer; }
+  button:hover { background: #2563eb; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  #pending { display: none; padding: 10px 20px; background: #1a2332; border-top: 1px solid #2b313d; font-size: 13px; }
+  #pending.visible { display: block; }
+  .approve, .reject { margin-right: 8px; padding: 4px 12px; font-size: 12px; }
+  .approve { background: #15803d; } .approve:hover { background: #16a34a; }
+  .reject { background: #b91c1c; } .reject:hover { background: #dc2626; }
+  .tool { font-size: 12px; color: #7cc4ff; margin: 2px 0; }
+  .thinking { margin: 3px 0; padding: 5px 10px; background: #141922; border-left: 3px solid #4b5563; border-radius: 4px; font-size: 12px; color: #9ca3af; white-space: pre-wrap; }
+  .thinking summary { cursor: pointer; color: #8b93a3; font-size: 11px; }
+  .tool-args { font-size: 11px; color: #64748b; margin-left: 8px; font-family: monospace; }
+  #status { font-size: 12px; }
+  .agent-run { font-size: 12px; color: #8b93a3; margin: 2px 0; }
+  #layout { flex: 1; display: flex; overflow: hidden; }
+  #sidebar { width: 220px; background: #12151c; border-right: 1px solid #262b36; display: flex; flex-direction: column; }
+  #rightbar { width: 240px; background: #12151c; border-left: 1px solid #262b36; display: flex; flex-direction: column; overflow-y: auto; padding: 10px; gap: 10px; }
+  #rightbar h3 { margin: 0; font-size: 13px; color: #7cc4ff; }
+  .metric-card { background: #1a1f2a; border: 1px solid #2b313d; border-radius: 8px; padding: 10px; }
+  .metric-card .num { font-size: 26px; font-weight: 700; color: #7cc4ff; }
+  .metric-card .label { font-size: 11px; color: #8b93a3; margin-top: 2px; }
+  .metric-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; color: #b6bdca; }
+  .metric-row .v { color: #e6e6e6; }
+  .bar-wrap { height: 8px; background: #0d1017; border-radius: 4px; overflow: hidden; margin-top: 6px; }
+  .bar-hit { height: 100%; background: #15803d; transition: width .4s; }
+  .bar-miss { height: 100%; background: #b91c1c; display: inline-block; }
+  #cache-history { max-height: 160px; overflow-y: auto; }
+  .cache-item { font-size: 11px; color: #8b93a3; padding: 2px 0; border-bottom: 1px solid #1c222d; }
+  .cache-item b { color: #7cc4ff; }
+  body[data-theme="light"] #rightbar { background: #fafbfc; border-left-color: var(--border); }
+  body[data-theme="light"] .metric-card { background: #fff; border-color: var(--border); }
+  body[data-theme="light"] .metric-row { color: var(--muted); }
+  body[data-theme="light"] .metric-row .v { color: var(--text); }
+  body[data-theme="light"] #cache-history { border-top-color: var(--border); }
+  body[data-theme="light"] .cache-item { border-bottom-color: var(--border); }
+  #session-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .session-item { padding: 8px 10px; border-radius: 6px; font-size: 13px; color: #b6bdca; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .session-item:hover { background: #1c222d; }
+  .session-item.active { background: #1d3a5f; color: #fff; }
+  #new-session { margin: 8px; padding: 8px; background: #1d4ed8; border: none; color: #fff; border-radius: 8px; font-size: 13px; cursor: pointer; }
+  #new-session:hover { background: #2563eb; }
+  .msg code { background: #2a3040; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  .msg h2, .msg h3, .msg h4 { margin: 8px 0 4px; }
+  .msg p { margin: 4px 0; }
+  .msg ul { margin: 4px 0; padding-left: 20px; }
+  .code-wrap { margin: 8px 0; border: 1px solid #2b313d; border-radius: 8px; overflow: hidden; }
+  .code-head { display: flex; justify-content: space-between; align-items: center; background: #1a1f2a; padding: 4px 10px; font-size: 12px; color: #8b93a3; }
+  .copy { background: #2a3040; border: none; color: #c6cdd8; border-radius: 4px; padding: 2px 10px; font-size: 11px; cursor: pointer; }
+  .copy:hover { background: #3a4254; }
+  .code-block { margin: 0; padding: 10px; font-size: 12px; overflow-x: auto; background: #0d1017; color: #d4dae5; }
+  body[data-theme="light"] .msg.user { background: #1d4ed8; color: #fff; }
+  body[data-theme="light"] .msg.agent { background: var(--agentbg); }
+  body[data-theme="light"] .meta, body[data-theme="light"] .pill { color: var(--muted); }
+  body[data-theme="light"] .subtask { background: #f0f2f5; border-left-color: #9db4d6; }
+  body[data-theme="light"] .code-block { background: var(--codebg); color: var(--text); }
+  body[data-theme="light"] .code-head { background: #e6e9ef; }
+  body[data-theme="light"] .copy { background: #dde1e8; color: var(--text); }
+  body[data-theme="light"] #inputbar { background: var(--panel); border-top-color: var(--border); }
+  body[data-theme="light"] #input, body[data-theme="light"] select { background: #fff; border-color: var(--border); color: var(--text); }
+  body[data-theme="light"] #sidebar { background: #fafbfc; border-right-color: var(--border); }
+  body[data-theme="light"] .session-item:hover { background: #eef1f6; }
+  @media (max-width: 720px) {
+    #sidebar { width: 100%; height: auto; max-height: 140px; border-right: none; border-bottom: 1px solid #262b36; }
+    #rightbar { display: none; }
+    #layout { flex-direction: column; }
+    header { gap: 8px; }
+    .msg { max-width: 92%; }
+  }
+  #pool-btn { background: #2a3040; padding: 6px 10px; font-size: 12px; }
+  #pool-btn:hover { background: #3a4254; }
+  #pool-drawer { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; z-index: 50; }
+  #pool-drawer.open { display: flex; justify-content: flex-end; }
+  #pool-panel { width: min(680px, 96vw); height: 100%; background: #0f1115; border-left: 1px solid #2b313d; display: flex; flex-direction: column; }
+  body[data-theme="light"] #pool-panel { background: #fff; border-left-color: var(--border); }
+  #pool-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid #262b36; }
+  #pool-head h2 { margin: 0; font-size: 15px; color: #7cc4ff; flex: 1; }
+  #pool-search { flex: 1; max-width: 260px; background: #0f1115; border: 1px solid #2b313d; border-radius: 8px; padding: 7px 12px; color: #e6e6e6; font-size: 13px; outline: none; }
+  #pool-body { flex: 1; overflow-y: auto; padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; }
+  .pool-group { font-size: 12px; color: #8b93a3; margin: 6px 0 2px; display: flex; align-items: center; gap: 8px; }
+  .pool-group::after { content: ''; flex: 1; height: 1px; background: #262b36; }
+  .pool-card { background: #161a22; border: 1px solid #2b313d; border-radius: 10px; padding: 12px 14px; }
+  .pool-card.is-default { border-color: #3b82f6; }
+  body[data-theme="light"] .pool-card { background: #fafbfc; border-color: var(--border); }
+  .pool-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .pool-card-head b { font-size: 14px; }
+  .tag { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: #1d3a5f; color: #7cc4ff; }
+  .tag.free { background: #14351f; color: #4ade80; }
+  .tag.off { background: #3a1d1d; color: #f87171; }
+  .tag.region { background: #232936; color: #9ca3af; }
+  .pool-card .row { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .pool-card input[type=text], .pool-card input[type=password], .pool-card select {
+    background: #0f1115; border: 1px solid #2b313d; border-radius: 6px; padding: 6px 10px; color: #e6e6e6; font-size: 12px; outline: none;
+  }
+  body[data-theme="light"] .pool-card input, body[data-theme="light"] .pool-card select { background: #fff; border-color: var(--border); color: var(--text); }
+  .pool-card .base-url { flex: 1; min-width: 200px; }
+  .model-select { max-width: 260px; flex: 1; min-width: 140px; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 6px; }
+  .btn-gray { background: #2a3040; } .btn-gray:hover { background: #3a4254; }
+  .btn-green { background: #15803d; } .btn-green:hover { background: #16a34a; }
+  .btn-red { background: #b91c1c; } .btn-red:hover { background: #dc2626; }
+  .pool-key { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 4px 0; flex-wrap: wrap; }
+  .pool-key .masked { font-family: monospace; color: #b6bdca; }
+  .key-status { font-size: 11px; padding: 1px 6px; border-radius: 8px; }
+  .key-status.ok { background: #14351f; color: #4ade80; }
+  .key-status.expired { background: #3a1d1d; color: #f87171; }
+  .key-status.unknown { background: #232936; color: #9ca3af; }
+  .pool-msg { font-size: 12px; margin-top: 6px; }
+  .pool-msg.ok { color: #4ade80; }
+  .pool-msg.err { color: #f87171; }
+  .pool-msg.busy { color: #7cc4ff; }
+  #key-select { max-width: 180px; font-size: 12px; }
+  .unsupported-note { font-size: 12px; color: #f87171; margin-top: 6px; }
+  #access-btn { background: #2a3040; padding: 6px 10px; font-size: 12px; }
+  #access-btn:hover { background: #3a4254; }
+  #access-drawer { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; z-index: 50; }
+  #access-drawer.open { display: flex; justify-content: flex-end; }
+  #access-panel { width: min(520px, 96vw); height: 100%; background: #0f1115; border-left: 1px solid #2b313d; display: flex; flex-direction: column; }
+  body[data-theme="light"] #access-panel { background: #fff; border-left-color: var(--border); }
+  #access-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid #262b36; }
+  #access-head h2 { margin: 0; font-size: 15px; color: #7cc4ff; flex: 1; }
+  #access-body { flex: 1; overflow-y: auto; padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; }
+  .access-root { background: #161a22; border: 1px solid #2b313d; border-radius: 10px; padding: 12px 14px; font-family: monospace; font-size: 13px; word-break: break-all; display: flex; align-items: center; gap: 8px; }
+  body[data-theme="light"] .access-root { background: #fafbfc; border-color: var(--border); }
+  .access-root .tag { font-size: 11px; color: #7cc4ff; border: 1px solid #3b4a63; border-radius: 6px; padding: 1px 6px; flex-shrink: 0; }
+  .access-root .tag-default { color: #8b93a3; border-color: #2b313d; }
+  .access-root b { font-size: 12px; }
+  .access-add-row { display: flex; gap: 8px; }
+  .access-add-row input { flex: 1; background: #0f1115; border: 1px solid #2b313d; border-radius: 8px; padding: 8px 12px; color: #e6e6e6; font-size: 13px; outline: none; }
+  body[data-theme="light"] .access-add-row input { background: #fff; border-color: var(--border); color: var(--text); }
+  .access-tip { font-size: 12px; color: #8b93a3; line-height: 1.7; }
+  .access-msg { font-size: 12px; margin-top: 2px; }
+  .access-msg.ok { color: #4ade80; }
+  .access-msg.err { color: #f87171; }
+  #login-overlay { position: fixed; inset: 0; background: rgba(6,8,12,.92); z-index: 100; display: flex; align-items: center; justify-content: center; }
+  #login-overlay.hidden { display: none; }
+  #login-card { background: #161a22; border: 1px solid #2b313d; border-radius: 14px; padding: 28px 32px; width: min(380px, 90vw); text-align: center; }
+  body[data-theme="light"] #login-card { background: #fff; border-color: var(--border); }
+  #login-card h2 { color: #7cc4ff; margin: 0 0 6px; font-size: 18px; }
+  #login-card p { color: #8b93a3; font-size: 12.5px; line-height: 1.7; margin: 0 0 16px; }
+  #login-card input { width: 100%; box-sizing: border-box; background: #0f1115; border: 1px solid #2b313d; border-radius: 8px; padding: 10px 12px; color: #e6e6e6; font-size: 14px; outline: none; margin-bottom: 10px; font-family: monospace; }
+  body[data-theme="light"] #login-card input { background: #fff; border-color: var(--border); color: var(--text); }
+  #login-card .err { color: #f87171; font-size: 12px; min-height: 16px; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>天枢</h1>
+  <span id="status" class="pill">连接中...</span>
+  <span id="agents" class="pill"></span>
+  <span class="spacer"></span>
+  <label class="pill">模型:</label>
+  <select id="provider-select" title="切换模型(运行时生效)"></select>
+  <button id="pool-btn">模型池</button>
+  <button id="access-btn">访问授权</button>
+  <button id="theme-btn" style="background:#2a3040;padding:6px 10px;font-size:12px;">☀ 浅色</button>
+</header>
+<div id="layout">
+  <div id="sidebar">
+    <button id="new-session">+ 新会话</button>
+    <div id="session-list"></div>
+  </div>
+  <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+    <div id="messages"></div>
+    <div id="pending"></div>
+    <div id="inputbar">
+      <select id="key-select" title="当前厂商 Key(自动优先选择,过期自动换下一个)" style="display:none"></select>
+      <input id="input" placeholder="输入任务,Enter 发送,主 Agent 将调度子 Agent 执行..." autofocus>
+      <button id="cancel-btn" style="display:none;background:#b91c1c;">取消</button>
+      <button id="send">发送</button>
+    </div>
+  </div>
+  <div id="rightbar">
+    <h3>缓存命中监测</h3>
+    <div class="metric-card">
+      <div class="num" id="cache-rate">--</div>
+      <div class="label">prompt 缓存命中率(实时)</div>
+      <div class="bar-wrap"><div class="bar-hit" id="cache-bar" style="width:0%"></div></div>
+      <div class="metric-row"><span>请求次数</span><span class="v" id="cache-req">0</span></div>
+      <div class="metric-row"><span>命中 token</span><span class="v" id="cache-hit">0</span></div>
+      <div class="metric-row"><span>未命中 token</span><span class="v" id="cache-miss">0</span></div>
+      <div class="metric-row"><span>总 prompt token</span><span class="v" id="cache-total">0</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="label" style="font-size:12px;color:#7cc4ff;">最近 20 次调用</div>
+      <div id="cache-history"></div>
+    </div>
+    <h3>记忆状态</h3>
+    <div class="metric-card">
+      <div class="metric-row"><span>注入条目</span><span class="v" id="mem-injected">-</span></div>
+      <div class="metric-row"><span>命中条目</span><span class="v" id="mem-hit">-</span></div>
+      <div class="metric-row"><span>注入 token</span><span class="v" id="mem-tokens">-</span></div>
+      <div class="metric-row"><span>上次任务</span><span class="v" id="mem-task" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">-</span></div>
+      <div id="mem-blocks"></div>
+    </div>
+  </div>
+</div>
+<div id="pool-drawer">
+  <div id="pool-panel">
+    <div id="pool-head">
+      <h2>模型池</h2>
+      <input id="pool-search" placeholder="搜索厂商 / 模型..." oninput="renderPool()">
+      <button id="pool-close" class="btn-sm btn-gray">关闭</button>
+    </div>
+    <div id="pool-body"></div>
+  </div>
+</div>
+<div id="access-drawer">
+  <div id="access-panel">
+    <div id="access-head">
+      <h2>访问授权</h2>
+      <button id="access-close" class="btn-sm btn-gray">关闭</button>
+    </div>
+    <div id="access-body"></div>
+  </div>
+</div>
+<div id="login-overlay">
+  <div id="login-card">
+    <h2>天枢 · 访问校验</h2>
+    <p>面板受访问令牌保护。令牌在服务启动日志中打印;<br>也可在 .env 配置 <code>TIANSHU_WEB_TOKEN</code> 固定。</p>
+    <input id="login-token" type="password" placeholder="输入访问令牌" autocomplete="off">
+    <div id="login-err" class="err"></div>
+    <button id="login-ok" class="btn-sm" style="background:#3b82f6;color:#fff;width:100%;padding:10px;">进入面板</button>
+  </div>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+let ws = null;
+const pendingBox = $('#pending');
+const providerSelect = $('#provider-select');
+const sessionList = $('#session-list');
+let currentModel = '';
+let currentSession = '';
+let loadingSession = false;
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+const TOKEN_KEY = 'ts_web_token';
+function getToken() { return localStorage.getItem(TOKEN_KEY) || ''; }
+function setToken(t) { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); }
+
+function showLogin() {
+  $('#login-overlay').classList.remove('hidden');
+  $('#login-token').focus();
+}
+
+async function api(path, opts) {
+  opts = opts || {};
+  opts.headers = Object.assign({ 'Content-Type': 'application/json', 'X-TS-Token': getToken() }, opts.headers || {});
+  const resp = await fetch(path, opts);
+  if (resp.status === 401) {
+    setToken('');
+    showLogin();
+    throw new Error('未授权');
+  }
+  return resp;
+}
+
+function renderMarkdown(text) {
+  const escaped = escapeHtml(text);
+  const codeBlockRe = /```(\w*)\n([\s\S]*?)```/g;
+  let processed = escaped.replace(codeBlockRe, (m, lang, code) => {
+    const id = 'CB' + (__cbSeq++);
+    window.__codeBlocks[id] = code;
+    return `<div class="code-wrap"><div class="code-head"><span>${lang||'code'}</span><button class="copy" onclick="copyCode('${id}')">复制</button></div><pre class="code-block">${code.trim()}</pre></div>`;
+  });
+  processed = processed
+    .replace(/^### (.*)$/gm, '<h4>$1</h4>')
+    .replace(/^## (.*)$/gm, '<h3>$1</h3>')
+    .replace(/^# (.*)$/gm, '<h2>$1</h2>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^[-*] (.*)$/gm, '<li>$1</li>')
+    .replace(/\n{2,}/g, '\n');
+  const lines = processed.split('\n');
+  let inList = false, html = '';
+  const blockEnds = ['H2','H3','H4'];
+  for (const line of lines) {
+    const t = line.trim();
+    if (t.startsWith('<li>')) {
+      if (!inList) { html += '<ul>'; inList = true; }
+      html += t;
+    } else {
+      if (inList) { html += '</ul>'; inList = false; }
+      if (!t) continue;
+      if (t.startsWith('<h') || t.startsWith('<pre') || t.startsWith('<div class="code')) { html += t; }
+      else html += `<p>${t}</p>`;
+    }
+  }
+  if (inList) html += '</ul>';
+  return html;
+}
+
+let __cbSeq = 0;
+window.__codeBlocks = {};
+
+function copyCode(id) {
+  const code = window.__codeBlocks[id];
+  if (!code) return;
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(code).then(
+      () => {},
+      () => legacyCopy(code)
+    );
+  } else {
+    legacyCopy(code);
+  }
+}
+
+function legacyCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); } catch (e) {}
+  document.body.removeChild(ta);
+}
+
+function addMsg(role, text, meta='') {
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  if (meta) { const m = document.createElement('div'); m.className = 'meta'; m.textContent = meta; div.appendChild(m); }
+  div.innerHTML = renderMarkdown(String(text));
+  $('#messages').appendChild(div);
+  $('#messages').scrollTop = $('#messages').scrollHeight;
+}
+
+function renderPlan(plan) {
+  let out = '';
+  for (const st of plan.subtasks || []) {
+    out += `\n[子任务 ${st.worker}] ${st.goal}\n`;
+    if (st.error) out += `  错误: ${st.error}\n`;
+    out += `  状态: ${st.status}\n`;
+    if (st.result) {
+      if (st.result.content) out += `  产出: ${st.result.content}\n`;
+      if (st.result.error) out += `  结果错误: ${st.result.error}\n`;
+      if (st.result.child_agents && st.result.child_agents.length) {
+        out += `  调用了子 Agent: ${st.result.child_agents.join(', ')}\n`;
+      }
+      if (st.result.tool_calls && st.result.tool_calls.length) {
+        for (const t of st.result.tool_calls) {
+          out += `  工具 [${t.name}]: ${String(t.output || '').slice(0, 200)}${t.output && t.output.length > 200 ? '...' : ''}\n`;
+        }
+      }
+    }
+  }
+  if (plan.summary) { addMsg('agent', plan.summary, `主 Agent 汇总 · ${currentModel}`); }
+  if (out) { addMsg('agent', out.trim(), '子任务'); }
+}
+
+pendingBox.addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  ws.send(JSON.stringify({ type: 'review', review_id: btn.dataset.id, approve: btn.classList.contains('approve') }));
+  btn.closest('.subtask').remove();
+  if (!pendingBox.children.length) pendingBox.classList.remove('visible');
+});
+
+async function postJSON(url, body) {
+  const resp = await api(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {}) });
+  return resp.json();
+}
+
+async function login() {
+  const token = $('#login-token').value.trim();
+  const err = $('#login-err');
+  if (!token) { err.textContent = '请输入访问令牌'; return; }
+  try {
+    const resp = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
+    const data = await resp.json();
+    if (resp.status === 401 || !data.ok) { err.textContent = '访问令牌错误'; return; }
+    setToken(token);
+    $('#login-overlay').classList.add('hidden');
+    err.textContent = '';
+    loadPool(true);
+    connectWs();
+  } catch (e) { err.textContent = '登录失败: ' + String(e); }
+}
+$('#login-ok').addEventListener('click', login);
+$('#login-token').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+let poolData = { vendors: [], default: '' };
+
+async function loadPool(keepSelection) {
+  try {
+    const resp = await api('/api/pool');
+    poolData = await resp.json();
+  } catch (e) { poolData = { vendors: [], default: '' }; }
+  const prev = keepSelection ? providerSelect.value : '';
+  providerSelect.innerHTML = '';
+  const connected = poolData.vendors.filter(v => v.connected);
+  for (const v of connected) {
+    const opt = document.createElement('option');
+    opt.value = v.key;
+    opt.dataset.model = v.model || '';
+    opt.textContent = `${v.name} · ${v.model || ''}`;
+    providerSelect.appendChild(opt);
+  }
+  if (!connected.length) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = '暂无接入模型,点击右侧"模型池"接入';
+    providerSelect.appendChild(opt);
+  }
+  providerSelect.value = prev && connected.some(v => v.key === prev) ? prev : poolData.default || (connected[0] || {}).key || '';
+  currentModel = providerSelect.selectedOptions[0]?.dataset?.model || '';
+  refreshKeySelect();
+}
+
+function refreshKeySelect() {
+  const sel = $('#key-select');
+  const vendor = poolData.vendors.find(v => v.key === providerSelect.value);
+  if (!vendor || !vendor.keys || !vendor.keys.length) { sel.style.display = 'none'; sel.innerHTML = ''; return; }
+  sel.style.display = 'inline-block';
+  sel.innerHTML = '';
+  for (const k of vendor.keys) {
+    const opt = document.createElement('option');
+    opt.value = k.id;
+    opt.textContent = `${k.label || k.masked} [${k.status}]${k.id === vendor.preferred_key ? ' ✓当前' : ''}`;
+    sel.appendChild(opt);
+  }
+  sel.value = vendor.preferred_key || vendor.keys[0].id || '';
+  if (sel.value) sel.dataset.vendor = vendor.key;
+}
+
+providerSelect.addEventListener('change', async () => {
+  const name = providerSelect.value;
+  if (!name) return;
+  const data = await postJSON('/api/pool/default', { vendor: name });
+  if (data.ok) {
+    const opt = providerSelect.selectedOptions[0];
+    currentModel = opt.dataset.model || name;
+    addMsg('agent', `已切换模型: ${name} (${currentModel})`, '系统');
+    $('#status').textContent = '已连接';
+    await loadPool(true);
+  } else {
+    addMsg('agent', `切换失败: ${data.error || '未知错误'}`, '系统');
+  }
+});
+
+$('#key-select').addEventListener('change', async () => {
+  const sel = $('#key-select');
+  const kid = sel.value;
+  const vendor = sel.dataset.vendor;
+  if (!kid || !vendor) return;
+  const data = await postJSON('/api/pool/default', { vendor, preferred_key: kid });
+  if (data.ok) { addMsg('agent', `当前 Key 已设为: ${sel.selectedOptions[0].textContent}`, '系统'); }
+  else { addMsg('agent', `设置 Key 失败: ${data.error || '未知错误'}`, '系统'); }
+});
+
+$('#pool-btn').addEventListener('click', () => { $('#pool-drawer').classList.add('open'); renderPool(); });
+$('#pool-close').addEventListener('click', () => $('#pool-drawer').classList.remove('open'));
+$('#pool-drawer').addEventListener('click', e => { if (e.target.id === 'pool-drawer') $('#pool-drawer').classList.remove('open'); });
+$('#access-btn').addEventListener('click', () => { $('#access-drawer').classList.add('open'); loadAccess(); });
+$('#access-close').addEventListener('click', () => $('#access-drawer').classList.remove('open'));
+$('#access-drawer').addEventListener('click', e => { if (e.target.id === 'access-drawer') $('#access-drawer').classList.remove('open'); });
+
+async function loadAccess() {
+  const body = $('#access-body');
+  let data;
+  try {
+    const res = await api('/api/access');
+    data = await res.json();
+  } catch (e) {
+    body.innerHTML = '<div class="access-msg err">加载失败: ' + escapeHtml(String(e)) + '</div>';
+    return;
+  }
+  const rows = [];
+  for (const d of (data.defaults || [])) {
+    rows.push('<div class="access-root"><span class="tag tag-default">默认</span><b>' + escapeHtml(d) + '</b></div>');
+  }
+  for (const r of (data.roots || [])) {
+    const scopeNote = r.scope === 'global' ? '全部会话' : '本会话(' + r.scope.replace('session:', '') + ')';
+    rows.push('<div class="access-root"><span class="tag">' + escapeHtml(scopeNote) + '</span><b>' + escapeHtml(r.path) + '</b>' +
+      '<button class="btn-sm btn-gray" style="margin-left:auto;" onclick="delAccess(this)">撤销</button></div>');
+  }
+  let sessionOpts = '<select id="access-scope" style="max-width:150px;background:#0f1115;border:1px solid #2b313d;border-radius:8px;padding:7px 8px;color:#e6e6e6;font-size:12px;"><option value="global">作用域:全部会话</option>';
+  if (currentSession) sessionOpts += '<option value="' + currentSession + '">作用域:本会话</option>';
+  sessionOpts += '</select>';
+  body.innerHTML =
+    '<h3 style="margin:0;font-size:14px;color:#7cc4ff;">Agent 可访问目录</h3>' +
+    rows.join('') +
+    '<div class="access-add-row">' +
+    '<input id="access-path" placeholder="输入要授权的绝对路径,如 /root/天枢/tianshu" onkeydown="if(event.key===\'Enter\')addAccess()">' +
+    sessionOpts +
+    '<button class="btn-sm" style="background:#3b82f6;color:#fff;" onclick="addAccess()">授权</button>' +
+    '</div>' +
+    '<div class="access-tip">默认情况下,Agent 只能读写其工作区(workspace)与临时敏感区;授权后额外放行对应目录,撤销即刻生效。会话级授权仅对该会话生效,并发任务互不影响。高危写入仍需人工审批。</div>' +
+    '<div id="access-msg"></div>';
+}
+
+async function addAccess() {
+  const input = $('#access-path');
+  const path = input.value.trim();
+  const msg = $('#access-msg');
+  if (!path) { return; }
+  const scopeSel = $('#access-scope');
+  const scope = scopeSel && scopeSel.value !== 'global' ? 'session:' + scopeSel.value : 'global';
+  const res = await api('/api/access', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, scope }) });
+  const data = await res.json();
+  msg.className = 'access-msg ' + (data.ok ? 'ok' : 'err');
+  msg.textContent = data.msg || data.error || '';
+  if (data.ok) { input.value = ''; loadAccess(); }
+}
+
+async function delAccess(btn) {
+  const rootEl = btn.closest('.access-root');
+  const path = rootEl.querySelector('b').textContent;
+  const tag = rootEl.querySelector('.tag').textContent;
+  const scope = tag === '全部会话' ? 'global' : 'session:' + tag.replace('本会话(', '').replace(')', '');
+  const msg = $('#access-msg');
+  const res = await api('/api/access', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path, scope }) });
+  const data = await res.json();
+  msg.className = 'access-msg ' + (data.ok ? 'ok' : 'err');
+  msg.textContent = data.msg || data.error || '';
+  if (data.ok) { loadAccess(); }
+}
+
+function poolCard(v) {
+  const models = [...new Set([...(v.models || []), ...(v.model ? [v.model] : [])])];
+  const modelOptions = models.map(m => `<option value="${m}" ${m === v.model ? 'selected' : ''}>${m}</option>`).join('');
+  const keyRows = (v.keys || []).map(k => `
+    <div class="pool-key">
+      <span class="masked">${k.label ? k.label + ' · ' : ''}${k.masked}</span>
+      <span class="key-status ${k.status}">${k.status}</span>
+      ${k.id === v.preferred_key ? '<span class="tag">当前</span>' : ''}
+      <button class="btn-sm btn-gray" onclick="toggleKey('${v.key}','${k.id}',${!k.enabled})">${k.enabled ? '停用' : '启用'}</button>
+      <button class="btn-sm btn-red" onclick="removeKey('${v.key}','${k.id}')">删除</button>
+    </div>`).join('');
+  const tags = [
+    `<span class="tag region">${v.region || ''}</span>`,
+    v.free ? '<span class="tag free">免费</span>' : '',
+    !v.supported ? '<span class="tag off">仅外部配置</span>' : '',
+    v.default ? '<span class="tag">✓ 当前</span>' : '',
+  ].join('');
+  return `
+  <div class="pool-card ${v.default ? 'is-default' : ''}" data-vendor="${v.key}">
+    <div class="pool-card-head">
+      <b>${v.name}</b> ${tags}
+      ${v.connected ? `<button class="btn-sm btn-green" onclick="setDefault('${v.key}')">设为当前</button>` : ''}
+      ${v.connected ? `<button class="btn-sm btn-gray" onclick="refreshVendor('${v.key}')">刷新模型列表</button>` : ''}
+      <span class="spacer"></span>
+    </div>
+    <div class="pool-card-head" style="margin-top:8px;font-size:12px;color:#8b93a3">
+      <input class="base-url" id="base-${v.key}" type="text" value="${v.base_url}" placeholder="Base URL">
+      <select class="model-select" id="model-${v.key}" onchange="setVendorModel('${v.key}')">${modelOptions}</select>
+    </div>
+    ${keyRows || '<div class="pool-msg" style="color:#8b93a3">未配置 Key</div>'}
+    <div class="row">
+      <input type="text" id="keylabel-${v.key}" placeholder="备注(可选)" style="width:110px">
+      <input type="password" id="keyval-${v.key}" placeholder="${v.key_required ? '粘贴 API Key' : '粘贴 Key(免费厂商可留空)'}" style="flex:1;min-width:160px">
+      <button class="btn-sm btn-gray" onclick="testVendor('${v.key}')">测试连接</button>
+      <button class="btn-sm btn-green" onclick="connectVendor('${v.key}')">${v.connected ? '新增并接入' : '接入'}</button>
+    </div>
+    <div class="pool-msg" id="msg-${v.key}"></div>
+    ${!v.supported ? '<div class="unsupported-note">⚠ 该厂商非 OpenAI 兼容协议,天枢无法直连;可在此保存配置供外部项目使用。</div>' : ''}
+    ${v.notes ? `<div style="font-size:11px;color:#64748b;margin-top:4px">${v.notes}</div>` : ''}
+  </div>`;
+}
+
+function renderPool() {
+  const q = ($('#pool-search').value || '').toLowerCase();
+  const vendors = poolData.vendors || [];
+  const match = v => !q || v.name.toLowerCase().includes(q) || (v.models || []).some(m => m.toLowerCase().includes(q));
+  const groups = [
+    ['国外', vendors.filter(v => v.region === '国外' && match(v))],
+    ['国内', vendors.filter(v => v.region === '国内' && match(v))],
+    ['本地', vendors.filter(v => v.region === '本地' && match(v))],
+  ];
+  let html = '';
+  for (const [gname, gv] of groups) {
+    if (!gv.length) continue;
+    html += `<div class="pool-group">${gname}</div>` + gv.map(poolCard).join('');
+  }
+  if (!html) html = '<div class="pool-msg" style="color:#8b93a3">无匹配结果</div>';
+  $('#pool-body').innerHTML = html;
+}
+
+function poolMsg(key, text, cls) {
+  const el = $(`#msg-${key}`);
+  if (el) { el.textContent = text; el.className = 'pool-msg ' + cls; }
+}
+
+async function testVendor(key) {
+  const v = poolData.vendors.find(x => x.key === key);
+  const base = $(`#base-${key}`).value.trim();
+  const model = $(`#model-${key}`).value;
+  const api = $(`#keyval-${key}`).value.trim();
+  poolMsg(key, '测试中...', 'busy');
+  const data = await postJSON('/api/pool/test', { vendor: key, base_url: base, model, api_key: api, api_style: v.api_style });
+  if (data.ok) poolMsg(key, `✅ 连接成功,${data.latency_ms}ms,模型名: ${data.model}`, 'ok');
+  else poolMsg(key, `❌ ${data.error || '测试失败'}`, 'err');
+}
+
+async function connectVendor(key) {
+  const v = poolData.vendors.find(x => x.key === key);
+  const base = $(`#base-${key}`).value.trim();
+  const model = $(`#model-${key}`).value;
+  const api = $(`#keyval-${key}`).value.trim();
+  const label = $(`#keylabel-${key}`).value.trim();
+  if (!api && v.key_required) { poolMsg(key, '需要填写 API Key', 'err'); return; }
+  poolMsg(key, '接入中(测试 + 保存)...', 'busy');
+  const data = await postJSON('/api/pool/connect', { vendor: key, base_url: base, model, keys: [{ value: api, label }], run_validation: !!api });
+  if (data.ok && data.added.length) {
+    poolMsg(key, `✅ 接入成功 ${data.tested.map(t => t.ok ? 'Key验证通过' : 'Key验证失败: ' + t.error).join('; ') || ''}`, 'ok');
+    await loadPool(true);
+    renderPool();
+  } else if (data.ok) {
+    poolMsg(key, '❌ Key 验证失败,未保存:' + (data.tested || []).map(t => ' ' + t.error).join(''), 'err');
+  } else {
+    poolMsg(key, '❌ ' + (data.error || '接入失败'), 'err');
+  }
+}
+
+async function setDefault(key) {
+  const data = await postJSON('/api/pool/default', { vendor: key });
+  if (data.ok) { addMsg('agent', `已切换 ${key} 为当前模型`, '系统'); await loadPool(true); renderPool(); }
+}
+
+async function refreshVendor(key) {
+  poolMsg(key, '刷新模型列表中...', 'busy');
+  const data = await postJSON('/api/pool/refresh', { vendor: key });
+  const r = (data.results || [])[0];
+  if (r && !r.error) {
+    poolMsg(key, `✅ 刷新成功,共 ${r.models} 个模型`, 'ok');
+    await loadPool(true); renderPool();
+  } else {
+    poolMsg(key, '❌ 刷新失败: ' + (r ? r.error : '未知'), 'err');
+  }
+}
+
+async function setVendorModel(key) {
+  const model = $(`#model-${key}`).value;
+  await postJSON('/api/pool/model', { vendor: key, model });
+  await loadPool(true);
+}
+
+async function toggleKey(key, kid, enabled) {
+  const data = await postJSON('/api/pool/keys', { vendor: key, action: 'toggle', kid, enabled });
+  if (data.ok) { await loadPool(true); renderPool(); }
+}
+
+async function removeKey(key, kid) {
+  const data = await postJSON('/api/pool/keys', { vendor: key, action: 'remove', kid });
+  if (data.ok) { await loadPool(true); renderPool(); }
+}
+
+let taskRunning = false;
+
+function setTaskRunning(running) {
+  taskRunning = running;
+  $('#send').disabled = running;
+  $('#cancel-btn').style.display = running ? 'inline-block' : 'none';
+}
+
+function ask() {
+  const task = $('#input').value.trim();
+  if (!task || taskRunning) return;
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    addMsg('agent', '(连接未就绪,请稍候重试)', '系统');
+    return;
+  }
+  addMsg('user', task);
+  $('#input').value = '';
+  $('#messages').innerHTML += '<div class="agent-run" id="activity"></div>';
+  setTaskRunning(true);
+  ws.send(JSON.stringify({ type: 'ask', task, session_id: currentSession }));
+}
+
+function renderActivity() {
+  const el = $('#activity');
+  if (!el) return;
+  let html = '';
+  for (const a of activities) {
+    if (a.event === 'subtask_start') {
+      html += `<div class="subtask running">▶ [${a.data.worker}] ${a.data.goal}</div>`;
+    } else if (a.event === 'subtask_done') {
+      html += `<div class="subtask done">✔ [${a.data.worker}] ${a.data.status}</div>`;
+    } else if (a.event === 'thinking') {
+      const txt = (a.data.content || '').replace(/</g, '&lt;');
+      html += `<details class="thinking"><summary>【思考】${a.data.agent || 'agent'}</summary>${txt}</details>`;
+    } else if (a.event === 'agent_action' && a.data.action === 'tool') {
+      const args = a.data.args ? `<span class="tool-args">${JSON.stringify(a.data.args).replace(/</g, '&lt;').slice(0, 120)}</span>` : '';
+      html += `<div class="tool">🔧 ${a.data.agent} 调用 ${a.data.tool}${args}</div>`;
+    } else if (a.event === 'agent_action' && a.data.action === 'call_agent') {
+      html += `<div class="tool">⇄ ${a.data.agent} 调用 ${a.data.target}</div>`;
+    } else if (a.event === 'phase') {
+      html += `<div class="meta">阶段: ${a.data.phase}</div>`;
+    }
+  }
+  el.innerHTML = html;
+  $('#messages').scrollTop = $('#messages').scrollHeight;
+}
+
+function handleAgentEvent(m) {
+  activities.push({ event: m.event, data: m.data });
+  renderActivity();
+}
+
+async function loadSessions(skipRestore) {
+  try {
+    const resp = await api('/api/sessions');
+    const data = await resp.json();
+    if (!data.sessions) return;
+    currentSession = data.current || (data.sessions[0] || {}).id || '';
+    sessionList.innerHTML = '';
+    for (const s of data.sessions) {
+      const div = document.createElement('div');
+      div.className = 'session-item' + (s.id === currentSession ? ' active' : '');
+      div.textContent = `${s.title || '会话'} · ${new Date(s.updated_at * 1000).toLocaleString('zh-CN', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'})}`;
+      div.dataset.id = s.id;
+      sessionList.appendChild(div);
+    }
+    if (currentSession && !loadingSession && !skipRestore) {
+      await restoreMessages(currentSession);
+    }
+  } catch (e) { /* 会话加载失败不影响主流程 */ }
+}
+
+let restoreSeq = 0;
+async function restoreMessages(sessionId) {
+  loadingSession = true;
+  const seq = ++restoreSeq;
+  try {
+    const resp = await api(`/api/session/${sessionId}/messages`);
+    const data = await resp.json();
+    if (seq !== restoreSeq) return;
+    $('#messages').innerHTML = '';
+    for (const m of data.messages || []) {
+      const role = (m.role === 'user') ? 'user' : 'agent';
+      addMsg(role, m.content || '', (m.role === 'user' ? '我' : '天枢'));
+    }
+  } catch (e) {}
+  if (seq === restoreSeq) loadingSession = false;
+}
+
+async function switchSession(id) {
+  const resp = await api('/api/session/switch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ session_id: id }) });
+  const data = await resp.json();
+  if (data.ok) {
+    currentSession = id;
+    restoreMessages(id);
+    loadSessions();
+  }
+}
+
+sessionList.addEventListener('click', e => {
+  const item = e.target.closest('.session-item');
+  if (item) switchSession(item.dataset.id);
+});
+$('#new-session').addEventListener('click', async () => {
+  const resp = await api('/api/session', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ title: '新会话' }) });
+  const data = await resp.json();
+  if (data.ok) {
+    $('#messages').innerHTML = '';
+    currentSession = data.session_id;
+    loadSessions();
+  }
+});
+
+function pct(n) {
+  return (Number(n) * 100).toFixed(1) + '%';
+}
+
+async function refreshMonitor() {
+  try {
+    const resp = await api('/api/memory');
+    const data = await resp.json();
+    const cache = data.cache || {};
+    const rate = cache.hit_rate || 0;
+    $('#cache-rate').textContent = pct(rate);
+    $('#cache-bar').style.width = (rate * 100) + '%';
+    $('#cache-req').textContent = cache.requests || 0;
+    $('#cache-hit').textContent = cache.hit_tokens || 0;
+    $('#cache-miss').textContent = cache.miss_tokens || 0;
+    $('#cache-total').textContent = cache.prompt_tokens || 0;
+    const hist = (cache.recent || []).slice().reverse();
+    $('#cache-history').innerHTML = hist.map(h =>
+      `<div class="cache-item"><b>${h.model}</b> hit:${h.hit} miss:${h.miss} (${pct(h.rate)})</div>`
+    ).join('') || '<div class="cache-item">暂无调用</div>';
+    const ms = data.memory_stats || {};
+    $('#mem-injected').textContent = ms.injected_entries ?? '-';
+    $('#mem-hit').textContent = ms.hit_entries ?? '-';
+    $('#mem-tokens').textContent = ms.injected_tokens ?? '-';
+    $('#mem-task').textContent = ms.task || '-';
+    $('#mem-task').title = ms.task || '';
+    const blocks = data.blocks || {};
+    $('#mem-blocks').innerHTML = Object.entries(blocks).map(([k, v]) =>
+      `<div class="metric-row"><span>${k}</span><span class="v">${v} 条</span></div>`
+    ).join('') || '';
+  } catch (e) { /* 忽略瞬时错误 */ }
+}
+
+setInterval(refreshMonitor, 2000);
+refreshMonitor();
+
+let heartbeatTimer = null;
+let lastPong = 0;
+let reconnectTimer = null;
+let reconnectAttempts = 0;
+const HEARTBEAT_MS = 15000;
+const PONG_TIMEOUT_MS = 60000;
+const RECONNECT_MAX_DELAY_MS = 30000;
+
+function startHeartbeat() {
+  stopHeartbeat();
+  lastPong = Date.now();
+  heartbeatTimer = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'ping' }));
+      if (Date.now() - lastPong > PONG_TIMEOUT_MS) {
+        $('#status').textContent = '心跳超时,正在重连...';
+        ws.close();
+      }
+    }
+  }, HEARTBEAT_MS);
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+}
+
+function scheduleReconnect() {
+  if (reconnectTimer) return;
+  const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), RECONNECT_MAX_DELAY_MS);
+  reconnectAttempts++;
+  $('#status').textContent = `连接断开,${Math.round(delay / 1000)}s 后重连...`;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connectWs();
+  }, delay);
+}
+
+function connectWs() {
+  stopHeartbeat();
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+  ws = new WebSocket(`ws://${location.host}/ws?token=${encodeURIComponent(getToken())}`);
+  ws.onopen = () => {
+    reconnectAttempts = 0;
+    $('#status').textContent = '已连接';
+    startHeartbeat();
+  };
+  ws.onclose = (ev) => {
+    $('#status').textContent = '连接断开,重连中...';
+    stopHeartbeat();
+    if (ev.code === 1008) {
+      setToken('');
+      showLogin();
+    } else {
+      scheduleReconnect();
+    }
+  };
+  ws.onmessage = onWsMessage;
+}
+
+function onWsMessage(e) {
+  const m = JSON.parse(e.data);
+  if (m.type === 'pong' || m.type === 'server_ping') {
+    lastPong = Date.now();
+    if (m.type === 'server_ping') ws.send(JSON.stringify({ type: 'server_pong' }));
+    return;
+  }
+  if (m.type === 'review_request') {
+    const d = m.data;
+    const row = document.createElement('div');
+    row.className = 'subtask';
+    row.innerHTML = `<b>待审批</b> ${d.agent} 调用 ${d.tool}${d.reason ? ' — ' + d.reason : ''}
+      <button class="approve" data-id="${d.id}">批准</button>
+      <button class="reject" data-id="${d.id}">拒绝</button>`;
+    pendingBox.appendChild(row);
+    pendingBox.classList.add('visible');
+  } else if (m.type === 'task_start') {
+    activities = [];
+  } else if (m.type === 'queued') {
+    addMsg('system', m.message || '前一个任务仍在执行,排队中...', '系统');
+  } else if (m.type === 'agent_event') {
+    handleAgentEvent(m);
+  } else if (m.type === 'result') {
+    const act = $('#activity');
+    if (act) act.remove();
+    setTaskRunning(false);
+    renderPlan(m.data);
+    loadSessions(true);
+  } else if (m.type === 'cancelled') {
+    const act = $('#activity');
+    if (act) act.remove();
+    setTaskRunning(false);
+    addMsg('agent', '(任务已取消)', '系统');
+    loadSessions(true);
+  }
+}
+
+let activities = [];
+
+$('#send').onclick = ask;
+$('#cancel-btn').onclick = () => { if (ws) ws.send(JSON.stringify({ type: 'cancel' })); };
+$('#theme-btn').onclick = () => {
+  const cur = document.body.dataset.theme || 'dark';
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.body.dataset.theme = next;
+  $('#theme-btn').textContent = next === 'dark' ? '☀ 浅色' : '🌙 深色';
+  try { localStorage.setItem('ts-theme', next); } catch(e) {}
+};
+try { const t = localStorage.getItem('ts-theme'); if (t === 'light') { document.body.dataset.theme = 'light'; $('#theme-btn').textContent = '🌙 深色'; } } catch(e) {}
+$('#input').addEventListener('keydown', e => { if (e.key === 'Enter') ask(); });
+loadPool();
+if (getToken()) {
+  loadSessions(true);
+  api('/api/state').then(r => r.json()).then(s => $('#agents').textContent = 'Agent: ' + s.agents.join(', ')).catch(() => {});
+  connectWs();
+} else {
+  showLogin();
+}
+</script>
+</body>
+</html>

@@ -51,7 +51,7 @@ export interface Settings {
 }
 
 function readSettings(): Settings {
-  const env = { ...process.env, ...loadEnvFile(ENV_FILE) };
+  const env = { ...loadEnvFile(ENV_FILE), ...process.env };
   const pick = (key: string): string => env[`TIANSHU_${key}`] ?? "";
 
   let providers: LLMProviderConfig[] = [];

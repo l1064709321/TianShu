@@ -1,6 +1,8 @@
 import { LLMError } from "../llm/types.js";
 import type { BaseProvider, LLMMessage, LLMResult } from "../llm/types.js";
 import { createProvider } from "../llm/factory.js";
+import { defaultCatalog } from "./catalog.js";
+import type { PoolStore } from "./store.js";
 
 export interface PoolKey {
   id: string;
@@ -215,4 +217,54 @@ export async function refreshModels(baseUrl: string, apiKey = "", apiStyle = "op
   } finally {
     clearTimeout(timer);
   }
+}
+
+export function poolVendors(store: PoolStore): Array<Record<string, unknown>> {
+  const catalog = defaultCatalog();
+  const out: Array<Record<string, unknown>> = [];
+  const seen = new Set<string>();
+  const push = (key: string, cfg: Record<string, unknown>) => {
+    out.push(vendorView(key, cfg, store));
+  };
+  for (const [key, cfg] of Object.entries(catalog)) {
+    seen.add(key);
+    push(key, cfg);
+  }
+  for (const key of Object.keys(store.vendors())) {
+    if (seen.has(key)) continue;
+    push(key, {});
+  }
+  return out;
+}
+
+function vendorView(key: string, cfg: Record<string, unknown>, store: PoolStore): Record<string, unknown> {
+  const saved = store.vendor(key) ?? {};
+  const keys = ((saved.keys ?? []) as Array<Record<string, any>>).map((k) => ({
+    id: k.id,
+    label: k.label ?? "",
+    enabled: k.enabled ?? true,
+    status: k.status ?? "unknown",
+    checked_at: k.checked_at ?? 0,
+    masked: maskKey(String(k.value ?? "")),
+  }));
+  const baseUrl = String(saved.base_url ?? "") || String(cfg.base_url ?? "");
+  const models = (saved.refreshed_models as string[]) || (cfg.models as string[]) || [];
+  return {
+    key,
+    name: cfg.name || saved.name || key,
+    region: cfg.region ?? "",
+    api_style: cfg.api_style ?? "openai",
+    base_url: baseUrl,
+    key_required: cfg.key_required ?? true,
+    free: cfg.free ?? false,
+    supported: cfg.supported ?? true,
+    notes: cfg.notes ?? "",
+    models,
+    model: saved.model ?? models[0] ?? "",
+    refreshed_at: saved.models_refreshed_at ?? 0,
+    keys,
+    preferred_key: store.data.preferred_keys?.[key] ?? "",
+    connected: keys.length > 0,
+    default: store.data.default_vendor === key,
+  };
 }

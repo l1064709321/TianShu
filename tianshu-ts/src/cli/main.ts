@@ -92,6 +92,44 @@ program
     console.log("支持的 provider:", availableProviders().join(", "));
   });
 
+program
+  .command("mockllm")
+  .description("启动本地 mock LLM 服务(OpenAI 兼容)")
+  .option("--host <host>", "监听地址", "127.0.0.1")
+  .option("--port <port>", "监听端口", "9100")
+  .action(async (opts) => {
+    const { createMockServer } = await import("../interfaces/web/mock_llm.js");
+    const server = createMockServer(opts.host, Number(opts.port));
+    server.listen(Number(opts.port), opts.host, () => {
+      console.log(`mock LLM 服务已启动: http://${opts.host}:${opts.port}`);
+    });
+  });
+
+program
+  .command("web")
+  .description("启动 Web 面板(默认端口 7800)")
+  .option("--host <host>", "监听地址", "127.0.0.1")
+  .option("--port <port>", "监听端口", "7800")
+  .option("--provider <name>", "LLM provider 名称")
+  .action(async (opts) => {
+    const { createWebServer } = await import("../interfaces/web/server.js");
+    const server = createWebServer({ host: opts.host, port: Number(opts.port), provider: opts.provider || null });
+    server.listen(Number(opts.port), opts.host, () => {
+      console.log(`天枢 Web 面板: http://${opts.host}:${opts.port}/`);
+    });
+  });
+
+program
+  .command("desktop")
+  .description("桌面端:启动 Web 服务并打开浏览器窗口")
+  .option("--host <host>", "监听地址", "127.0.0.1")
+  .option("--port <port>", "监听端口", "7800")
+  .option("--provider <name>", "LLM provider 名称")
+  .action(async (opts) => {
+    const { launchDesktop } = await import("../interfaces/desktop/launcher.js");
+    await launchDesktop(opts.host, Number(opts.port), opts.provider || null);
+  });
+
 program.parseAsync(process.argv).catch((e) => {
   console.error(e);
   process.exit(1);
