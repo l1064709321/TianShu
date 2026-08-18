@@ -183,21 +183,6 @@ function resolvePath(p: string): string {
 
 export function registerBuiltinTools(registry: ToolRegistry): void {
   registry.register(new Tool({
-    name: "read_file",
-    description: "读取文件内容",
-    format_result: "RAW",
-    parameters: {
-      type: "object",
-      properties: { path: { type: "string", description: "文件路径(相对工作区或绝对路径)" } },
-      required: ["path"],
-    },
-    func: async ({ path: p }) => {
-      const f = ensureInsideWorkspace(resolvePath(String(p)));
-      return fs.readFileSync(f, "utf-8");
-    },
-  }));
-
-  registry.register(new Tool({
     name: "write_file",
     description: "写入文件(覆盖),目录不存在时自动创建,写入前自动快照旧版本(出错可回滚)",
     requires_review: true,
@@ -215,6 +200,21 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
       fs.mkdirSync(path.dirname(f), { recursive: true });
       fs.writeFileSync(f, String(content), "utf-8");
       return `已写入 ${p} (${String(content).length} 字符)`;
+    },
+  }));
+
+  registry.register(new Tool({
+    name: "read_file",
+    description: "读取文件内容",
+    format_result: "RAW",
+    parameters: {
+      type: "object",
+      properties: { path: { type: "string", description: "文件路径(相对工作区或绝对路径)" } },
+      required: ["path"],
+    },
+    func: async ({ path: p }) => {
+      const f = ensureInsideWorkspace(resolvePath(String(p)));
+      return fs.readFileSync(f, "utf-8");
     },
   }));
 

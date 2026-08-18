@@ -23,3 +23,5 @@ wheels/
 config/models.json
 config/access_roots.json
 config/*.tmp
+/workspace/.ts-snapshots/
+/workspace/workspace/

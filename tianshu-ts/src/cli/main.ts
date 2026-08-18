@@ -2,6 +2,7 @@
 import { Command } from "commander";
 import { createApp } from "../app.js";
 import { availableProviders } from "../core/llm/factory.js";
+import type { ReviewRequest } from "../core/review/system.js";
 
 async function ensureMockLlmIfNeeded(): Promise<boolean> {
   const { settings } = await import("../config.js");
@@ -80,32 +81,119 @@ program
 
 program
   .command("chat")
-  .description("交互式聊天,支持多轮对话与 Agent 协同")
+  .description("交互式聊天,支持多轮对话、Agent 协同与终端内联审批")
   .option("--provider <name>", "LLM provider 名称")
   .option("--model <name>", "模型名称")
-  .option("--review <mode>", "审核模式", "manual")
+  .option("--review <mode>", "审核模式: manual/auto_approve/auto_reject", "manual")
   .action(async (opts) => {
     const app = createApp(opts.provider || null, opts.model || "", opts.review);
-    console.log("天枢已就绪。输入任务开始,输入 /exit 退出,输入 /agents 查看 Agent,/skills 查看技能,/approve <id> 批准审核");
     const readline = await import("node:readline/promises");
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    while (true) {
-      const line = (await rl.question("你> ")).trim();
-      if (!line) continue;
-      if (["/exit", "/quit"].includes(line)) break;
+    const yellow = (s: string) => `\x1b[33m${s}\x1b[0m`;
+    const lineQueue: Array<(line: string) => void> = [];
+    const taskQueue: string[] = [];
+    let taskRunning = false;
+    let stdinDone = false;
+    rl.on("line", (line) => {
+      const waiter = lineQueue.shift();
+      if (waiter) {
+        waiter(line);
+        return;
+      }
+      taskQueue.push(line);
+      void drainTasks();
+    });
+    rl.on("close", () => {
+      stdinDone = true;
+      for (const w of lineQueue.splice(0)) w("");
+      void drainTasks();
+    });
+    async function drainTasks() {
+      if (taskRunning) return;
+      taskRunning = true;
+      while (taskQueue.length) {
+        const line = taskQueue.shift()!;
+        await handleLine(line);
+      }
+      taskRunning = false;
+      if (stdinDone && !process.exitCode) process.exit(0);
+    }
+    const nextLine = (promptText: string): Promise<string> =>
+      new Promise((resolve) => {
+        const timer = setTimeout(() => resolve(""), 60000);
+        rl.setPrompt(promptText);
+        rl.prompt();
+        lineQueue.push((line) => {
+          clearTimeout(timer);
+          resolve(line);
+        });
+      });
+    const sessionChoices = new Map<string, boolean>();
+    app.review.subscribe((req) => {
+      const remembered = sessionChoices.get(req.tool);
+      if (remembered !== undefined) {
+        app.review.decide(req.id, remembered, "session");
+        return;
+      }
+      void approvePrompt(req);
+    });
+    async function approvePrompt(req: ReviewRequest) {
+      console.log(yellow(`\n⚠ 高危操作待审批: ${req.agent} 调用 ${req.tool}${req.reason ? ` — ${req.reason}` : ""}`));
+      const pending = app.review.pending();
+      if (pending.length > 1) {
+        console.log(yellow(`   当前共有 ${pending.length} 项待审批,输入 /pending 查看全部`));
+      }
+      while (true) {
+        const answer = (await nextLine("审批[y/a/n/d]> ")).trim();
+        if (answer === "y") {
+          app.review.decide(req.id, true, "cli_once");
+          return;
+        }
+        if (answer === "a") {
+          sessionChoices.set(req.tool, true);
+          app.review.decide(req.id, true, "cli_session");
+          console.log(`已记住:本会话内 ${req.tool} 自动批准`);
+          return;
+        }
+        if (answer === "d") {
+          sessionChoices.set(req.tool, false);
+          app.review.decide(req.id, false, "cli_session");
+          console.log(`已记住:本会话内 ${req.tool} 自动拒绝`);
+          return;
+        }
+        if (answer === "p") {
+          for (const p of app.review.pending()) console.log(`     · ${p.id} ${p.agent}.${p.tool}`);
+          continue;
+        }
+        app.review.decide(req.id, false, "cli_reject");
+        return;
+      }
+    }
+    async function handleLine(raw: string) {
+      const line = raw.trim();
+      if (!line) return;
+      if (["/exit", "/quit"].includes(line)) {
+        rl.close();
+        return;
+      }
       if (line === "/agents") {
         console.log([...app.agents.keys()].join(", "));
-        continue;
+        return;
       }
       if (line === "/skills") {
         console.log(app.skills.descriptions() || "(无)");
-        continue;
+        return;
       }
-      if (line.startsWith("/approve ")) {
-        const rid = line.split(" ").pop()!;
-        const ok = app.review.decide(rid, true);
+      if (line === "/pending") {
+        const pending = app.review.pending();
+        console.log(pending.length ? pending.map((p) => `· ${p.id} ${p.agent}.${p.tool}`).join("\n") : "(无待审批)");
+        return;
+      }
+      const m = line.match(/^\/(approve|reject)\s+(.+)/);
+      if (m) {
+        const ok = app.review.decide(m[2], m[1] === "approve", "cli_cmd");
         console.log(`审批 ${ok ? "成功" : "失败(不存在或已处理)"}`);
-        continue;
+        return;
       }
       const plan = await app.ask(line, true);
       for (const st of plan.subtasks) {
@@ -113,7 +201,12 @@ program
       }
       console.log(plan.summary || "(无输出)");
     }
-    rl.close();
+    console.log(
+      "天枢已就绪。输入任务开始;/exit 退出;/agents 查看 Agent;/skills 查看技能;/pending 查看待审批;" +
+        "审批提示输入 y(批准一次) a(本会话总是批准) n(拒绝) d(本会话总是拒绝)",
+    );
+    rl.setPrompt("你> ");
+    rl.prompt();
   });
 
 program
