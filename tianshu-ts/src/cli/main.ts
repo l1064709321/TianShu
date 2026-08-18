@@ -226,6 +226,48 @@ program
   });
 
 program
+  .command("config")
+  .description("查看或配置模型(.env 持久化;密钥仅显示掩码)")
+  .option("--provider <name>", "设置默认厂商")
+  .option("--base-url <url>", "设置 API 地址")
+  .option("--api-key <key>", "设置密钥")
+  .option("--model <name>", "设置模型名")
+  .option("--list", "列出支持的厂商")
+  .action(async (opts) => {
+    const { ENV_FILE, writeEnvFile } = await import("../config.js");
+    if (opts.list) {
+      console.log("支持的 provider:", availableProviders().join(", "));
+      return;
+    }
+    const updates: Array<[string, string]> = [];
+    if (opts.provider) updates.push(["TIANSHU_DEFAULT_PROVIDER", opts.provider]);
+    if (opts.baseUrl) updates.push(["TIANSHU_DEFAULT_PROVIDER_BASE_URL", opts.baseUrl]);
+    if (opts.apiKey) updates.push(["TIANSHU_DEFAULT_PROVIDER_API_KEY", opts.apiKey]);
+    if (opts.model) updates.push(["TIANSHU_DEFAULT_PROVIDER_MODEL", opts.model]);
+    if (updates.length) {
+      writeEnvFile(updates);
+      console.log(`已写入 ${ENV_FILE}:`);
+      for (const [k, v] of updates) console.log(`  ${k}=${k.includes("KEY") ? v.slice(0, 4) + "****" : v}`);
+      console.log("重启后生效(或下次启动自动读取)");
+      return;
+    }
+    const { settings } = await import("../config.js");
+    const p = settings.default_provider;
+    const cfg = settings.providers.find((x) => x.name === p) ?? settings.providers[0];
+    if (!cfg) {
+      console.log("未配置 provider,请使用 --provider/--base-url/--api-key/--model 配置");
+      return;
+    }
+    const mask = cfg.api_key ? cfg.api_key.slice(0, 4) + "****" + cfg.api_key.slice(-4) : "(空)";
+    console.log(`配置文件: ${ENV_FILE}`);
+    console.log(`默认厂商: ${p}`);
+    console.log(`API 地址: ${cfg.base_url}`);
+    console.log(`模型名  : ${cfg.model}`);
+    console.log(`密钥    : ${mask}`);
+    console.log("修改: tianshu config --provider <name> --base-url <url> --api-key <key> --model <name>");
+  });
+
+program
   .command("mockllm")
   .description("启动本地 mock LLM 服务(OpenAI 兼容)")
   .option("--host <host>", "监听地址", "127.0.0.1")

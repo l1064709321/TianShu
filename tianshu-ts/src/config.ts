@@ -13,10 +13,12 @@ export const SENSITIVE_DIR = path.join(WORKSPACE_DIR, ".ts-secrets");
 
 const ENV_FILE = process.env.TIANSHU_ENV || path.join(PROJECT_ROOT, ".env");
 
-function loadEnvFile(file: string): Record<string, string> {
+export { ENV_FILE };
+
+function readEnvFile(): Record<string, string> {
   const out: Record<string, string> = {};
   try {
-    const content = fs.readFileSync(file, "utf-8");
+    const content = fs.readFileSync(ENV_FILE, "utf-8");
     for (const line of content.split("\n")) {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith("#")) continue;
@@ -28,9 +30,34 @@ function loadEnvFile(file: string): Record<string, string> {
       out[key] = value;
     }
   } catch {
-    // env 文件不存在时忽略
+    /* env 文件不存在时忽略 */
   }
   return out;
+}
+
+export function writeEnvFile(entries: Array<[string, string]>): void {
+  const current = new Map<string, string>();
+  let lines: string[] = [];
+  try {
+    lines = fs.readFileSync(ENV_FILE, "utf-8").split("\n");
+    for (const line of lines) {
+      const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(line);
+      if (m) current.set(m[1], line);
+    }
+  } catch {
+    /* 文件不存在则新建 */
+  }
+  for (const [key, value] of entries) {
+    const line = `${key}=${value}`;
+    if (current.has(key)) {
+      const idx = lines.findIndex((l) => l.startsWith(key + "="));
+      lines[idx] = line;
+    } else {
+      lines.push(line);
+    }
+  }
+  fs.mkdirSync(path.dirname(ENV_FILE), { recursive: true });
+  fs.writeFileSync(ENV_FILE, lines.filter((l, i) => !(l.trim() === "" && i === lines.length - 1)).join("\n") + "\n");
 }
 
 export interface LLMProviderConfig {
@@ -52,7 +79,7 @@ export interface Settings {
 }
 
 function readSettings(): Settings {
-  const env = { ...loadEnvFile(ENV_FILE), ...process.env };
+  const env = { ...readEnvFile(), ...process.env };
   const pick = (key: string): string => env[`TIANSHU_${key}`] ?? "";
 
   let providers: LLMProviderConfig[] = [];

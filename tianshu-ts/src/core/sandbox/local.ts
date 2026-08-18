@@ -128,7 +128,12 @@ export async function runInLocalSandbox(args: string[], cwd: string, timeout: nu
   }
   if (hardenedLevel > 0) ensureTraversable(baseCwd);
   const script = scriptFor(baseCwd, timeout, hardenedLevel ?? 0, args);
-  return runOnce(script, baseCwd, timeout);
+  const first = await runOnce(script, baseCwd, timeout);
+  if (first.err && !first.out.trim()) {
+    const second = await runOnce(script, baseCwd, timeout);
+    return second;
+  }
+  return first;
 }
 
 export async function detectBackend(): Promise<string> {

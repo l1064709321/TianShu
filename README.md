@@ -30,6 +30,8 @@ npm run web        # 启动 Web 面板(自动拉起本地 mock LLM,离线可用)
 cd tianshu-ts
 npx tsx src/cli/main.ts ask "用三句话介绍你自己"
 npx tsx src/cli/main.ts chat        # 交互模式,支持终端内联审批(y/a/n/d)
+npx tsx src/cli/main.ts config      # 查看当前模型配置(密钥掩码)
+npx tsx src/cli/main.ts config --provider deepseek --base-url https://api.deepseek.com/v1 --api-key sk-xxx --model deepseek-chat   # 配置模型(.env 持久化)
 npx tsx src/cli/main.ts doctor      # 环境体检
 npx tsx src/cli/main.ts mockllm     # 手动启动本地 mock LLM
 npx tsx src/cli/main.ts desktop     # 启动桌面端启动器
