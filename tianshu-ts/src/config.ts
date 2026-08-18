@@ -4,7 +4,8 @@ import * as fs from "node:fs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const PROJECT_ROOT = path.resolve(here, "../..");
-export const SKILLS_DIR = path.join(PROJECT_ROOT, "skills");
+export const TS_ROOT = path.resolve(here, "..");
+export const SKILLS_DIR = process.env.TIANSHU_SKILLS_DIR || path.join(TS_ROOT, "skills");
 export const WORKSPACE_DIR = process.env.TIANSHU_WORKSPACE
   ? path.resolve(process.env.TIANSHU_WORKSPACE)
   : path.join(PROJECT_ROOT, "workspace");

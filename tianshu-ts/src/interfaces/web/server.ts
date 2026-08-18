@@ -36,6 +36,10 @@ function tokenValid(state: ServerState, provided: string): boolean {
 function bindReview(state: ServerState): void {
   const tianshu = state.tianshu;
   tianshu.review.subscribe((req) => {
+    if (!state.clients.size) {
+      tianshu.review.decide(req.id, false, "web_no_clients");
+      return;
+    }
     const payload = { type: "review_request", data: { ...req } };
     for (const c of [...state.clients]) c.sendText(JSON.stringify(payload));
   });
