@@ -8,7 +8,7 @@
 [![零依赖](https://img.shields.io/badge/runtime-Node%20builtin%20only-2b6cb0)](https://nodejs.org)
 [![Stars](https://img.shields.io/github/stars/l1064709321/tianshu?style=social)](https://github.com/l1064709321/tianshu)
 
-> **天魁**——北斗七星之首,指引方向的第一颗星。
+> **天魁**——北斗第六星开阳之辅,魁星之主,主文运与魁首。
 
 一个**多 Agent 协同系统**,能力目标对标 opencode:由一个主 Agent(Orchestrator)理解任务、拆解子任务、调度多个子 Agent(Worker)并行执行,再汇总结果。Agent 之间可相互调用,可携带技能(Skills)、工具(Tools)、知识库(RAG),所有高危操作经过审核系统把关,全部运行在沙箱中,并留存审计日志。
 
