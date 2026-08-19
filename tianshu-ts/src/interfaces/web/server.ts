@@ -30,7 +30,8 @@ function buildApp(provider: string | null = null): TianshuApp {
 }
 
 function tokenValid(state: ServerState, provided: string): boolean {
-  return state.webToken !== "" && provided === state.webToken;
+  if (state.webToken === "") return true;
+  return provided === state.webToken;
 }
 
 function bindReview(state: ServerState): void {
@@ -62,15 +63,16 @@ function runExclusive(task: () => Promise<Record<string, unknown>>): Promise<Rec
   return p;
 }
 
-export function createWebServer(options: { host?: string; port?: number; provider?: string | null } = {}): Server {
+export function createWebServer(options: { host?: string; port?: number; provider?: string | null; noToken?: boolean } = {}): Server {
   const clients = new Set<{ sendText: (data: string) => void }>();
+  const webToken = options.noToken ? "" : (settings.web_token !== "" ? settings.web_token : newToken());
   const state: ServerState = {
     tianshu: buildApp(options.provider ?? null),
-    webToken: settings.web_token || newToken(),
+    webToken,
     clients,
   };
-  if (!settings.web_token) {
-    console.error(`[web] 未配置 TIANSHU_WEB_TOKEN,已生成随机访问令牌: ${state.webToken}`);
+  if (!webToken && !options.noToken) {
+    console.error(`[web] 未配置 TIANSHU_WEB_TOKEN,已生成随机访问令牌: ${webToken}`);
   }
   bindReview(state);
 

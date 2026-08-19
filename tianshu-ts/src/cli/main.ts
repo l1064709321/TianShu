@@ -339,13 +339,18 @@ program
 
 program
   .command("start")
-  .description("一键启动:自动找可用端口(8000~8999),拉起 mock LLM + Web 面板")
+  .description("一键启动:自动找可用端口(8000-8999),拉起 mock LLM + Web 面板(本地免登录)")
   .option("--host <host>", "监听地址", "127.0.0.1")
   .option("--port <port>", "Web 面板起始端口", "8000")
   .option("--mock-port <port>", "Mock LLM 端口", "9100")
   .option("--provider <name>", "LLM provider 名称(默认 auto)")
+  .option("--token", "启用访问令牌(默认禁用)")
   .action(async (opts) => {
     const net = await import("node:net");
+    if (!opts.token) {
+      const cfg = await import("../config.js");
+      (cfg as any).settings.web_token = "";
+    }
     const findPort = (start: number): Promise<number> =>
       new Promise((resolve, reject) => {
         let cur = start;
@@ -367,7 +372,7 @@ program
     console.log(`Mock LLM 已启动: http://${opts.host}:${mockPort}`);
     const webPort = await findPort(Number(opts.port));
     const { createWebServer } = await import("../interfaces/web/server.js");
-    const server = createWebServer({ host: opts.host, port: webPort, provider });
+    const server = createWebServer({ host: opts.host, port: webPort, provider, noToken: !opts.token });
     await new Promise<void>((resolve) => server.listen(webPort, opts.host, () => resolve()));
     console.log(`天枢已就绪: http://${opts.host}:${webPort}/`);
     console.log("输入 Ctrl+C 退出");

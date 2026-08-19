@@ -110,7 +110,7 @@ function readSettings(): Settings {
     providers,
     default_provider: pick("DEFAULT_PROVIDER") || "mock",
     mode: (pick("MODE") || "full") as "full" | "headless",
-    web_token: pick("WEB_TOKEN") || "",
+    web_token: env[`TIANSHU_WEB_TOKEN`] || "",
   };
 }
 
