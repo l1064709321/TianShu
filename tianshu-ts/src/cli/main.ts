@@ -337,6 +337,42 @@ program
     await launchDesktop(opts.host, Number(opts.port), opts.provider || null);
   });
 
+program
+  .command("start")
+  .description("一键启动:自动找可用端口(8000~8999),拉起 mock LLM + Web 面板")
+  .option("--host <host>", "监听地址", "127.0.0.1")
+  .option("--port <port>", "Web 面板起始端口", "8000")
+  .option("--mock-port <port>", "Mock LLM 端口", "9100")
+  .option("--provider <name>", "LLM provider 名称(默认 auto)")
+  .action(async (opts) => {
+    const net = await import("node:net");
+    const findPort = (start: number): Promise<number> =>
+      new Promise((resolve, reject) => {
+        let cur = start;
+        const tryNext = () => {
+          if (cur - start > 999) return reject(new Error("未找到可用端口(8000-8999)"));
+          const s = net.createServer();
+          s.once("error", () => { cur++; tryNext(); });
+          s.listen(cur, opts.host, () => { s.close(); resolve(cur); });
+        };
+        tryNext();
+      });
+    const { settings } = await import("../config.js");
+    const provider = opts.provider || (settings.default_provider === "mock" ? "mock" : null);
+    if (!provider) console.log("未配置 provider,启动 mock 模式...");
+    const mockPort = Number(opts.mockPort);
+    const { createMockServer } = await import("../interfaces/web/mock_llm.js");
+    const mockServer = createMockServer(opts.host, mockPort);
+    await new Promise<void>((resolve) => mockServer.listen(mockPort, opts.host, () => resolve()));
+    console.log(`Mock LLM 已启动: http://${opts.host}:${mockPort}`);
+    const webPort = await findPort(Number(opts.port));
+    const { createWebServer } = await import("../interfaces/web/server.js");
+    const server = createWebServer({ host: opts.host, port: webPort, provider });
+    await new Promise<void>((resolve) => server.listen(webPort, opts.host, () => resolve()));
+    console.log(`天枢已就绪: http://${opts.host}:${webPort}/`);
+    console.log("输入 Ctrl+C 退出");
+  });
+
 program.parseAsync(process.argv).catch((e) => {
   console.error(e);
   process.exit(1);

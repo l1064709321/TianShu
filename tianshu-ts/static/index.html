@@ -198,27 +198,46 @@
     </div>
   </div>
   <div id="rightbar">
-    <h3>缓存命中监测</h3>
-    <div class="metric-card">
-      <div class="num" id="cache-rate">--</div>
-      <div class="label">prompt 缓存命中率(实时)</div>
-      <div class="bar-wrap"><div class="bar-hit" id="cache-bar" style="width:0%"></div></div>
-      <div class="metric-row"><span>请求次数</span><span class="v" id="cache-req">0</span></div>
-      <div class="metric-row"><span>命中 token</span><span class="v" id="cache-hit">0</span></div>
-      <div class="metric-row"><span>未命中 token</span><span class="v" id="cache-miss">0</span></div>
-      <div class="metric-row"><span>总 prompt token</span><span class="v" id="cache-total">0</span></div>
+    <div style="display:flex;gap:4px;margin-bottom:10px;">
+      <button id="rb-config-btn" class="btn-sm btn-green" style="flex:1;">模型配置</button>
+      <button id="rb-monitor-btn" class="btn-sm btn-gray" style="flex:1;">运行监控</button>
     </div>
-    <div class="metric-card">
-      <div class="label" style="font-size:12px;color:#7cc4ff;">最近 20 次调用</div>
-      <div id="cache-history"></div>
+    <div id="rb-config-view">
+      <h3 style="margin:0 0 8px;font-size:13px;color:#7cc4ff;">当前配置</h3>
+      <div class="metric-card" style="padding:8px;">
+        <div class="metric-row"><span>厂商</span><span class="v" id="cfg-vendor">-</span></div>
+        <div class="metric-row"><span>模型</span><span class="v" id="cfg-model">-</span></div>
+        <div class="metric-row"><span>API 地址</span><span class="v" style="font-size:11px;word-break:break-all;" id="cfg-baseurl">-</span></div>
+        <div class="metric-row"><span>密钥</span><span class="v" id="cfg-key">-</span></div>
+      </div>
+      <button id="open-pool-btn" style="width:100%;margin-top:8px;background:#15803d;">配置厂商 / 切换模型</button>
+      <div style="font-size:11px;color:#8b93a3;margin-top:8px;line-height:1.6;">
+        💡 点击"配置厂商"打开模型池面板,可添加多个厂商、管理 API Key、切换默认模型。
+      </div>
     </div>
-    <h3>记忆状态</h3>
-    <div class="metric-card">
-      <div class="metric-row"><span>注入条目</span><span class="v" id="mem-injected">-</span></div>
-      <div class="metric-row"><span>命中条目</span><span class="v" id="mem-hit">-</span></div>
-      <div class="metric-row"><span>注入 token</span><span class="v" id="mem-tokens">-</span></div>
-      <div class="metric-row"><span>上次任务</span><span class="v" id="mem-task" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">-</span></div>
-      <div id="mem-blocks"></div>
+    <div id="rb-monitor-view" style="display:none;">
+      <h3>缓存命中监测</h3>
+      <div class="metric-card">
+        <div class="num" id="cache-rate">--</div>
+        <div class="label">prompt 缓存命中率(实时)</div>
+        <div class="bar-wrap"><div class="bar-hit" id="cache-bar" style="width:0%"></div></div>
+        <div class="metric-row"><span>请求次数</span><span class="v" id="cache-req">0</span></div>
+        <div class="metric-row"><span>命中 token</span><span class="v" id="cache-hit">0</span></div>
+        <div class="metric-row"><span>未命中 token</span><span class="v" id="cache-miss">0</span></div>
+        <div class="metric-row"><span>总 prompt token</span><span class="v" id="cache-total">0</span></div>
+      </div>
+      <div class="metric-card">
+        <div class="label" style="font-size:12px;color:#7cc4ff;">最近 20 次调用</div>
+        <div id="cache-history"></div>
+      </div>
+      <h3>记忆状态</h3>
+      <div class="metric-card">
+        <div class="metric-row"><span>注入条目</span><span class="v" id="mem-injected">-</span></div>
+        <div class="metric-row"><span>命中条目</span><span class="v" id="mem-hit">-</span></div>
+        <div class="metric-row"><span>注入 token</span><span class="v" id="mem-tokens">-</span></div>
+        <div class="metric-row"><span>上次任务</span><span class="v" id="mem-task" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">-</span></div>
+        <div id="mem-blocks"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -437,6 +456,7 @@ async function loadPool(keepSelection) {
   providerSelect.value = prev && connected.some(v => v.key === prev) ? prev : poolData.default || (connected[0] || {}).key || '';
   currentModel = providerSelect.selectedOptions[0]?.dataset?.model || '';
   refreshKeySelect();
+  updateConfigDisplay();
 }
 
 function refreshKeySelect() {
@@ -935,6 +955,47 @@ $('#theme-btn').onclick = () => {
 };
 try { const t = localStorage.getItem('ts-theme'); if (t === 'light') { document.body.dataset.theme = 'light'; $('#theme-btn').textContent = '🌙 深色'; } } catch(e) {}
 $('#input').addEventListener('keydown', e => { if (e.key === 'Enter') ask(); });
+
+// 右侧边栏 Tab 切换
+let rightBarView = 'config';
+$('#rb-config-btn').onclick = () => {
+  rightBarView = 'config';
+  $('#rb-config-view').style.display = '';
+  $('#rb-monitor-view').style.display = 'none';
+  $('#rb-config-btn').className = 'btn-sm btn-green';
+  $('#rb-monitor-btn').className = 'btn-sm btn-gray';
+};
+$('#rb-monitor-btn').onclick = () => {
+  rightBarView = 'monitor';
+  $('#rb-config-view').style.display = 'none';
+  $('#rb-monitor-view').style.display = '';
+  $('#rb-config-btn').className = 'btn-sm btn-gray';
+  $('#rb-monitor-btn').className = 'btn-sm btn-green';
+};
+// 默认显示配置视图
+$('#rb-config-btn').click();
+
+// 配置厂商按钮 → 打开模型池抽屉
+$('#open-pool-btn').onclick = () => {
+  $('#pool-btn').click();
+};
+
+// 更新配置显示
+function updateConfigDisplay() {
+  const vendor = poolData.vendors.find(v => v.key === providerSelect.value);
+  if (vendor) {
+    $('#cfg-vendor').textContent = vendor.name;
+    $('#cfg-model').textContent = vendor.model || '-';
+    $('#cfg-baseurl').textContent = vendor.base_url || '-';
+    $('#cfg-key').textContent = vendor.keys && vendor.keys.length ? (vendor.keys[0].masked || '已配置') : '-';
+  } else {
+    $('#cfg-vendor').textContent = '-';
+    $('#cfg-model').textContent = '-';
+    $('#cfg-baseurl').textContent = '-';
+    $('#cfg-key').textContent = '-';
+  }
+}
+
 loadPool();
 if (getToken()) {
   loadSessions(true);

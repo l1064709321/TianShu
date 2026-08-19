@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "tsx src/cli/main.ts",
     "build": "tsc",
+    "start": "node --import tsx src/cli/main.ts start",
     "test": "node --disable-warning=ExperimentalWarning --import tsx --test \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
