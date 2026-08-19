@@ -1,14 +1,14 @@
-# 天枢 (TianShu)
+# 天魁 (TianKui)
 
 [![语言](https://img.shields.io/badge/language-TypeScript-blue)](https://www.typescriptlang.org)
 [![Node](https://img.shields.io/badge/Node.js-%3E%3D22.5-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/l1064709321/tianshu/blob/main/LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/l1064709321/tianshu/node.js.yml?label=CI&logo=githubactions)](https://github.com/l1064709321/tianshu/actions)
-[![测试](https://img.shields.io/badge/tests-72%20passing-brightgreen)](https://github.com/l1064709321/tianshu/tree/main/tianshu-ts/test)
+[![测试](https://img.shields.io/badge/tests-72%20passing-brightgreen)](https://github.com/l1064709321/tianshu/tree/main/tiankui-ts/test)
 [![零依赖](https://img.shields.io/badge/runtime-Node%20builtin%20only-2b6cb0)](https://nodejs.org)
 [![Stars](https://img.shields.io/github/stars/l1064709321/tianshu?style=social)](https://github.com/l1064709321/tianshu)
 
-> **天枢**——北斗七星之首,指引方向的第一颗星。
+> **天魁**——北斗七星之首,指引方向的第一颗星。
 
 一个**多 Agent 协同系统**,能力目标对标 opencode:由一个主 Agent(Orchestrator)理解任务、拆解子任务、调度多个子 Agent(Worker)并行执行,再汇总结果。Agent 之间可相互调用,可携带技能(Skills)、工具(Tools)、知识库(RAG),所有高危操作经过审核系统把关,全部运行在沙箱中,并留存审计日志。
 
@@ -68,7 +68,7 @@
 ## 快速开始
 
 ```bash
-cd tianshu-ts
+cd tiankui-ts
 npm install
 npm run web        # 启动 Web 面板(自动拉起本地 mock LLM,离线可用)
 ```
@@ -78,7 +78,7 @@ npm run web        # 启动 Web 面板(自动拉起本地 mock LLM,离线可用)
 接入真实模型:
 
 ```bash
-cd tianshu-ts
+cd tiankui-ts
 npx tsx src/cli/main.ts config --provider deepseek \
   --base-url https://api.deepseek.com/v1 \
   --api-key sk-xxx \
@@ -97,7 +97,7 @@ DEFAULT_MODEL=deepseek-chat
 ## CLI
 
 ```bash
-cd tianshu-ts
+cd tiankui-ts
 npx tsx src/cli/main.ts ask "用三句话介绍你自己"      # 单轮问答
 npx tsx src/cli/main.ts chat                        # 交互模式(终端内联审批 y/a/n/d)
 npx tsx src/cli/main.ts config                      # 查看当前模型配置(密钥掩码)
@@ -119,7 +119,7 @@ npx tsx src/cli/main.ts desktop                     # 启动桌面端启动器
 - 三栏布局:左侧会话列表 / 中间对话 / 右侧模型配置 + 运行监控
 - 模型配置视图:在线查看/配置厂商、模型、API 地址与密钥
 - 监控视图:缓存、记忆、后台状态一览
-- 默认免登录;`tianshu start --token <token>` 启用访问认证
+- 默认免登录;`tiankui start --token <token>` 启用访问认证
 
 ## 安全模型
 
@@ -135,7 +135,7 @@ npx tsx src/cli/main.ts desktop                     # 启动桌面端启动器
 ## 目录结构
 
 ```
-tianshu-ts/
+tiankui-ts/
 ├── src/
 │   ├── cli/                 # CLI(commander,纯终端)
 │   ├── core/
@@ -163,7 +163,7 @@ tianshu-ts/
 ## 测试
 
 ```bash
-cd tianshu-ts
+cd tiankui-ts
 npx tsc --noEmit          # 类型检查
 npm test                  # 运行全部测试(node --test)
 ```

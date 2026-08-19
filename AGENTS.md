@@ -1,14 +1,14 @@
-# 项目:天枢
+# 项目:天魁
 
 多 Agent 协同系统,目标对标 opencode。需求详见 README.md。
 
 ## 技术约定
 
-- 后端:TypeScript / Node 22 / `node:http` + `node:sqlite`(工程在 tianshu-ts/)
+- 后端:TypeScript / Node 22 / `node:http` + `node:sqlite`(工程在 tiankui-ts/)
 - CLI:commander(纯终端,无框架)
 - LLM:兼容 OpenAI 兼容接口、本地 Ollama、多厂商(除 Claude)
 - 代码中不添加注释,除非用户要求
-- 测试框架:`node --test`(tianshu-ts/test)
+- 测试框架:`node --test`(tiankui-ts/test)
 
 ## 核心设计
 

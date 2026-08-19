@@ -1,0 +1,31 @@
+{
+  "name": "tiankui",
+  "version": "0.1.0",
+  "description": "天魁 - 多 Agent 协同系统 (TypeScript)",
+  "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "bin": {
+    "tiankui": "./dist/cli/main.js"
+  },
+  "scripts": {
+    "dev": "tsx src/cli/main.ts",
+    "build": "tsc",
+    "start": "node --import tsx src/cli/main.ts start",
+    "test": "node --disable-warning=ExperimentalWarning --import tsx --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  },
+  "optionalDependencies": {
+    "@esbuild/linux-arm64": "^0.28.2"
+  }
+}
