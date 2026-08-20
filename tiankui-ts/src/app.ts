@@ -117,7 +117,7 @@ export function createApp(
   for (const a of [main, coder, crawler, assistant, judge]) bus.register(a);
   setProvider(main.provider);
 
-  const orch = new Orchestrator(main, bus, parallel, null, 3, eventSink);
+  const orch = new Orchestrator(main, bus, parallel, null, 3, 3, true, 2, eventSink, null);
   const monitor = new CacheMonitor();
   for (const a of [main, coder, crawler, assistant, judge]) {
     a.provider.usage_hook = monitor.record.bind(monitor);
